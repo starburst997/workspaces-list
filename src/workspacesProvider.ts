@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import { MacOSWindowManager, WindowInfo } from './macosWindowManager';
+import { ClaudeCodeMonitor } from './claudeCodeMonitor';
 import { ConfigReader, WorkspaceConfig } from './configReader';
 import { IconRenderer } from './iconRenderer';
-import { ClaudeCodeMonitor } from './claudeCodeMonitor';
+import { MacOSWindowManager, WindowInfo } from './macosWindowManager';
 
 export enum ClaudeCodeStatus {
 	Idle,
@@ -139,26 +139,8 @@ export class WorkspacesProvider implements vscode.TreeDataProvider<WorkspaceItem
 				})
 			);
 			console.log(`[WorkspacesList] Total workspace items created: ${this.workspaces.length}`);
-		} catch (error: any) {
+		} catch (error: unknown) {
 			console.error('[WorkspacesList] Failed to load workspaces:', error);
-
-			// Show user-friendly error for accessibility permissions
-			if (error.message === 'ACCESSIBILITY_PERMISSION_REQUIRED') {
-				vscode.window.showErrorMessage(
-					'Workspaces List requires Accessibility permissions to detect windows. Click "Open Settings" to grant access, then restart Cursor/VSCode.',
-					'Open Settings',
-					'Learn More'
-				).then(selection => {
-					if (selection === 'Open Settings') {
-						// Try newer macOS 13+ URL first, fall back to older
-						const settingsUrl = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility';
-						vscode.env.openExternal(vscode.Uri.parse(settingsUrl));
-					} else if (selection === 'Learn More') {
-						vscode.env.openExternal(vscode.Uri.parse('https://support.apple.com/guide/mac-help/allow-accessibility-apps-to-access-your-mac-mh43185/mac'));
-					}
-				});
-			}
-
 			this.workspaces = [];
 		}
 	}

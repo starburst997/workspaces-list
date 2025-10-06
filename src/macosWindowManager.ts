@@ -1,7 +1,7 @@
-import * as path from 'path';
 import { exec } from 'child_process';
-import { promisify } from 'util';
 import * as fs from 'fs/promises';
+import * as path from 'path';
+import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
@@ -72,7 +72,7 @@ export class MacOSWindowManager {
 
 			console.log(`[WorkspacesList] Found ${windows.length} workspaces`);
 			return windows;
-		} catch (error: any) {
+		} catch (error: unknown) {
 			console.error('[WorkspacesList] Error getting windows:', error);
 			return [];
 		}
@@ -110,7 +110,7 @@ export class MacOSWindowManager {
 	 * Focus a specific window by workspace path
 	 * Uses VSCode's openFolder command which is more reliable than AppleScript
 	 */
-	async focusWindow(workspacePath: string): Promise<boolean> {
+	async focusWindow(): Promise<boolean> {
 		// This method is called from the extension context,
 		// so the actual switching is handled by vscode.commands.executeCommand
 		// We return true here, and the provider will handle the command
@@ -126,21 +126,11 @@ export class MacOSWindowManager {
 
 	/**
 	 * Check if the current window is focused
+	 * Simplified to always return true to avoid AppleScript permission issues
 	 */
 	async isCurrentWindowFocused(): Promise<boolean> {
-		const script = `
-			tell application "System Events"
-				set frontApp to name of first application process whose frontmost is true
-				return frontApp
-			end tell
-		`;
-
-		try {
-			const { stdout } = await execAsync(`osascript -e '${script.replace(/'/g, "'\\''")}'`);
-			const frontApp = stdout.trim();
-			return frontApp.includes('Cursor') || frontApp.includes('Code');
-		} catch (error) {
-			return false;
-		}
+		// Always return true - the monitoring overhead is minimal
+		// and we avoid needing accessibility permissions
+		return true;
 	}
 }

@@ -4,7 +4,7 @@ import { ConfigReader, WorkspaceConfig } from "./configReader"
 import { IconRenderer } from "./iconRenderer"
 import { MacOSWindowManager, WindowInfo } from "./macosWindowManager"
 import { ClaudeCodeDecorator } from "./claudeCodeDecorator"
-import { ClaudeCodeStatus } from "./types"
+import { ClaudeCodeStatusInfo } from "./types"
 
 export class WorkspaceItem extends vscode.TreeItem {
   constructor(
@@ -13,7 +13,7 @@ export class WorkspaceItem extends vscode.TreeItem {
     public readonly windowInfo: WindowInfo,
     public readonly context: vscode.ExtensionContext,
     public readonly config?: WorkspaceConfig,
-    public readonly claudeStatus?: ClaudeCodeStatus,
+    public readonly claudeStatus?: ClaudeCodeStatusInfo,
     iconPath?:
       | vscode.ThemeIcon
       | vscode.Uri
@@ -28,6 +28,15 @@ export class WorkspaceItem extends vscode.TreeItem {
 
     // Set resourceUri for decorations using custom scheme
     this.resourceUri = vscode.Uri.from({ scheme: "workspace-list", path })
+
+    // Apply custom background color from config if available
+    if (config?.color) {
+      this.resourceUri = vscode.Uri.from({
+        scheme: "workspace-list",
+        path,
+        query: `color=${encodeURIComponent(config.color)}`,
+      })
+    }
 
     this.tooltip = `${path}\n${windowInfo.appName}`
     this.contextValue = "workspace"
@@ -152,6 +161,9 @@ export class WorkspacesProvider
 
   async focusWorkspace(item: WorkspaceItem): Promise<void> {
     try {
+      // Mark as acknowledged so RecentlyFinished status changes to Running
+      this.decorator.markAsAcknowledged(item.path)
+
       // Use VSCode's built-in command to switch to the workspace
       // This opens the folder in a new window or switches to existing window
       const uri = vscode.Uri.file(item.path)
@@ -171,6 +183,7 @@ export class WorkspacesProvider
    * Only monitors when window is focused (performance optimization)
    */
   private startMonitoring(): void {
+    console.log("[WorkspacesList] Starting Claude Code status monitoring")
     // Monitor every 5 seconds
     this.monitoringInterval = setInterval(async () => {
       if (!this.isWindowFocused) {
@@ -178,7 +191,13 @@ export class WorkspacesProvider
       }
 
       await this.updateClaudeCodeStatus()
+
+      // Refresh tree view to ensure decorations are updated
+      this._onDidChangeTreeData.fire()
     }, 5000)
+
+    // Do an immediate update
+    this.updateClaudeCodeStatus()
   }
 
   /**

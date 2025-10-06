@@ -3,12 +3,8 @@ import { ClaudeCodeMonitor } from "./claudeCodeMonitor"
 import { ConfigReader, WorkspaceConfig } from "./configReader"
 import { IconRenderer } from "./iconRenderer"
 import { MacOSWindowManager, WindowInfo } from "./macosWindowManager"
-
-export enum ClaudeCodeStatus {
-  Idle,
-  Running,
-  WaitingForInput,
-}
+import { ClaudeCodeDecorator } from "./claudeCodeDecorator"
+import { ClaudeCodeStatus } from "./types"
 
 export class WorkspaceItem extends vscode.TreeItem {
   constructor(
@@ -60,14 +56,14 @@ export class WorkspacesProvider
   private configReader: ConfigReader
   private iconRenderer: IconRenderer
   private claudeMonitor: ClaudeCodeMonitor
-  private decorator: any // ClaudeCodeDecorator - using any to avoid circular import
+  private decorator: ClaudeCodeDecorator
   private monitoringInterval: NodeJS.Timeout | undefined
   private isWindowFocused: boolean = true
   private disposables: vscode.Disposable[] = []
 
   constructor(
     private context: vscode.ExtensionContext,
-    decorator: any, // ClaudeCodeDecorator
+    decorator: ClaudeCodeDecorator,
   ) {
     this.windowManager = new MacOSWindowManager()
     this.configReader = new ConfigReader()

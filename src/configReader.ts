@@ -74,18 +74,22 @@ export class ConfigReader {
   /**
    * Validate and sanitize config
    */
-  private validateConfig(config: any): WorkspaceConfig {
+  private validateConfig(config: unknown): WorkspaceConfig {
     const validated: WorkspaceConfig = {}
 
-    if (typeof config.icon === "string") {
+    if (!config || typeof config !== "object") {
+      return validated
+    }
+
+    if ("icon" in config && typeof config.icon === "string") {
       validated.icon = config.icon
     }
 
-    if (typeof config.color === "string") {
+    if ("color" in config && typeof config.color === "string") {
       validated.color = config.color
     }
 
-    if (typeof config.displayName === "string") {
+    if ("displayName" in config && typeof config.displayName === "string") {
       validated.displayName = config.displayName
     }
 

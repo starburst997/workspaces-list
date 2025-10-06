@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 import { ClaudeCodeMonitor } from "./claudeCodeMonitor"
-import { ClaudeCodeStatus } from "./workspacesProvider"
+import { ClaudeCodeStatus } from "./types"
 
 export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
   private _onDidChangeFileDecorations: vscode.EventEmitter<
@@ -59,9 +59,7 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
   }
 
   async updateAllStatuses(workspacePaths: string[]): Promise<void> {
-    const updates = await Promise.all(
-      workspacePaths.map((path) => this.updateStatus(path)),
-    )
+    await Promise.all(workspacePaths.map((path) => this.updateStatus(path)))
     // Fire event for all changed paths
     const changedUris = workspacePaths.map((path) => vscode.Uri.file(path))
     this._onDidChangeFileDecorations.fire(changedUris)

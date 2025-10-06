@@ -1,13 +1,20 @@
 import * as vscode from "vscode"
 import * as fs from "fs/promises"
 import * as path from "path"
-import { ClaudeCodeStatus } from "./workspacesProvider"
+import { ClaudeCodeStatus } from "./types"
+
+interface ClaudeMessage {
+  role: string
+  content: unknown
+  cwd?: string
+  workingDirectory?: string
+}
 
 interface ConversationMetadata {
   workingDirectory: string
   lastModified: number
   messageCount: number
-  lastMessage?: any
+  lastMessage?: ClaudeMessage
 }
 
 export class ClaudeCodeMonitor {

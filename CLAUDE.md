@@ -256,3 +256,8 @@ node_modules/                      # Dependencies (git-ignored)
 - Config file watching uses VSCode's FileSystemWatcher
 - All file operations handle ~ expansion for home directory
 - Path normalization ensures consistent workspace matching
+
+# IMPORTANT
+
+- Makes sure to compile and check for any typing issue after being done with a task
+- Do not use `any`, use strong typing

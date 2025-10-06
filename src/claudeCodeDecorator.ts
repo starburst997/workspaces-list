@@ -5,7 +5,9 @@ import { ClaudeCodeStatus, ClaudeCodeStatusInfo } from "./types"
 const DEBUG = false // Enable debug logging - set to true for debugging
 
 function log(...args: unknown[]): void {
-  if (!DEBUG) return
+  if (!DEBUG) {
+    return
+  }
   console.log("[ClaudeCodeDecorator]", ...args)
 }
 
@@ -28,7 +30,9 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
   provideFileDecoration(
     uri: vscode.Uri,
   ): vscode.ProviderResult<vscode.FileDecoration> {
-    log(`provideFileDecoration called for URI: ${uri.toString()}, scheme: ${uri.scheme}, path: ${uri.fsPath}`)
+    log(
+      `provideFileDecoration called for URI: ${uri.toString()}, scheme: ${uri.scheme}, path: ${uri.fsPath}`,
+    )
 
     // Only provide decorations for our custom scheme
     if (uri.scheme !== "workspace-list") {
@@ -43,7 +47,7 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
       this.uriCache.set(workspacePath, [])
     }
     const cachedUris = this.uriCache.get(workspacePath)!
-    if (!cachedUris.some(u => u.toString() === uri.toString())) {
+    if (!cachedUris.some((u) => u.toString() === uri.toString())) {
       cachedUris.push(uri)
       log(`Cached URI for ${workspacePath}: ${uri.toString()}`)
     }
@@ -65,7 +69,10 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
       statusInfo.lastMessageTime <= acknowledgedTime
     ) {
       // User has seen this message, show Running instead of RecentlyFinished or Executing
-      if (status === ClaudeCodeStatus.RecentlyFinished || status === ClaudeCodeStatus.Executing) {
+      if (
+        status === ClaudeCodeStatus.RecentlyFinished ||
+        status === ClaudeCodeStatus.Executing
+      ) {
         log(
           `Message acknowledged for ${workspacePath}, showing Running instead of ${ClaudeCodeStatus[status]}`,
         )
@@ -91,7 +98,7 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
       const decoration = {
         badge: "▶",
         tooltip: `Claude Code: Executing Task (${statusInfo.conversationCount || 0} session${(statusInfo.conversationCount || 0) > 1 ? "s" : ""})`,
-        color: new vscode.ThemeColor("terminal.ansiGreen"),
+        color: new vscode.ThemeColor("workspacesList.claudeOrange"), // Claude Code orange
       }
       log(`Returning Executing decoration:`, decoration)
       return decoration
@@ -103,11 +110,16 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
         ? Math.round((Date.now() - statusInfo.lastMessageTime) / 1000 / 60)
         : 0
 
+      // Calculate gradient color from green to blue over 30 minutes
+      const gradientColor = this.calculateGradientColor(
+        statusInfo.lastMessageTime,
+      )
+
       // Use a simpler badge character that VSCode can render
       const decoration = {
         badge: "◉",
         tooltip: `Claude Code: Task Finished ${minutesAgo}m ago (${statusInfo.conversationCount || 0} session${(statusInfo.conversationCount || 0) > 1 ? "s" : ""})`,
-        color: new vscode.ThemeColor("charts.green"),
+        color: gradientColor,
       }
       log(`Returning RecentlyFinished decoration:`, decoration)
       return decoration
@@ -140,13 +152,12 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
 
   /**
    * Calculate gradient color for recently finished tasks
-   * Returns color that fades from bright to dim over 30 minutes
+   * Returns color that smoothly transitions from green to blue over 30 minutes
+   * Uses predefined theme colors for smooth gradient steps
    */
-  private calculateGradientColor(
-    lastMessageTime?: number,
-  ): vscode.ThemeColor {
+  private calculateGradientColor(lastMessageTime?: number): vscode.ThemeColor {
     if (!lastMessageTime) {
-      return new vscode.ThemeColor("terminal.ansiCyan")
+      return new vscode.ThemeColor("workspacesList.gradientGreen")
     }
 
     const minutesAgo = (Date.now() - lastMessageTime) / 1000 / 60
@@ -155,16 +166,31 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
     // Clamp between 0 and maxMinutes
     const clamped = Math.max(0, Math.min(minutesAgo, maxMinutes))
 
-    // Calculate intensity (1.0 at 0 min, 0.3 at 30 min)
-    const intensity = 1.0 - (clamped / maxMinutes) * 0.7
+    // Calculate transition progress (0.0 at 0 min, 1.0 at 30 min)
+    const progress = clamped / maxMinutes
 
-    // Use different theme colors based on intensity
-    if (intensity > 0.8) {
-      return new vscode.ThemeColor("terminal.ansiCyan") // Very recent
-    } else if (intensity > 0.5) {
-      return new vscode.ThemeColor("terminal.ansiBlue") // Recent
+    // Map to gradient color steps (7 steps for smooth transition)
+    if (progress < 0.14) {
+      // 0-4.2 min: green
+      return new vscode.ThemeColor("workspacesList.gradientGreen")
+    } else if (progress < 0.28) {
+      // 4.2-8.4 min: cyan 1
+      return new vscode.ThemeColor("workspacesList.gradientCyan1")
+    } else if (progress < 0.43) {
+      // 8.4-12.9 min: cyan 2
+      return new vscode.ThemeColor("workspacesList.gradientCyan2")
+    } else if (progress < 0.57) {
+      // 12.9-17.1 min: cyan 3
+      return new vscode.ThemeColor("workspacesList.gradientCyan3")
+    } else if (progress < 0.71) {
+      // 17.1-21.3 min: blue 1
+      return new vscode.ThemeColor("workspacesList.gradientBlue1")
+    } else if (progress < 0.86) {
+      // 21.3-25.8 min: blue 2
+      return new vscode.ThemeColor("workspacesList.gradientBlue2")
     } else {
-      return new vscode.ThemeColor("editorInfo.foreground") // Getting old
+      // 25.8-30 min: blue 3
+      return new vscode.ThemeColor("workspacesList.gradientBlue3")
     }
   }
 
@@ -212,9 +238,7 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
       status?.lastMessageTime &&
       status.lastMessageTime > acknowledgedTime
     ) {
-      log(
-        `New message detected for ${workspacePath}, clearing acknowledgment`,
-      )
+      log(`New message detected for ${workspacePath}, clearing acknowledgment`)
       this.acknowledgedTimestamps.delete(workspacePath)
     }
 
@@ -230,7 +254,9 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
       // Trigger decoration update using cached URIs
       const cachedUris = this.uriCache.get(workspacePath) || []
       if (cachedUris.length > 0) {
-        log(`Firing change for ${cachedUris.length} cached URI(s) for ${workspacePath}`)
+        log(
+          `Firing change for ${cachedUris.length} cached URI(s) for ${workspacePath}`,
+        )
         this._onDidChangeFileDecorations.fire(cachedUris)
       } else {
         // Fallback if no cached URI
@@ -251,14 +277,12 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
     const results = await Promise.all(
       workspacePaths.map(async (path) => ({
         path,
-        changed: await this.updateStatus(path)
-      }))
+        changed: await this.updateStatus(path),
+      })),
     )
 
     // Return paths that actually changed
-    const changedPaths = results
-      .filter(r => r.changed)
-      .map(r => r.path)
+    const changedPaths = results.filter((r) => r.changed).map((r) => r.path)
 
     if (changedPaths.length > 0) {
       log(`${changedPaths.length} workspace(s) had status changes`)
@@ -270,7 +294,9 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
         if (cachedUris.length > 0) {
           allChangedUris.push(...cachedUris)
         } else {
-          allChangedUris.push(vscode.Uri.from({ scheme: "workspace-list", path }))
+          allChangedUris.push(
+            vscode.Uri.from({ scheme: "workspace-list", path }),
+          )
         }
       }
 

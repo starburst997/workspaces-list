@@ -64,10 +64,10 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
       statusInfo.lastMessageTime &&
       statusInfo.lastMessageTime <= acknowledgedTime
     ) {
-      // User has seen this message, show Running instead of RecentlyFinished
-      if (status === ClaudeCodeStatus.RecentlyFinished) {
+      // User has seen this message, show Running instead of RecentlyFinished or Executing
+      if (status === ClaudeCodeStatus.RecentlyFinished || status === ClaudeCodeStatus.Executing) {
         log(
-          `Message acknowledged for ${workspacePath}, showing Running instead of RecentlyFinished`,
+          `Message acknowledged for ${workspacePath}, showing Running instead of ${ClaudeCodeStatus[status]}`,
         )
         status = ClaudeCodeStatus.Running
       }

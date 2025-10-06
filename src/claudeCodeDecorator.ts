@@ -198,7 +198,7 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
   /**
    * Update status and clear acknowledgment if there's a new message
    */
-  async updateStatus(workspacePath: string): Promise<void> {
+  async updateStatus(workspacePath: string): Promise<boolean> {
     log(`Updating status for ${workspacePath}`)
     const status = await this.claudeMonitor.getStatus(workspacePath)
     const oldStatus = this.statusCache.get(workspacePath)
@@ -239,27 +239,50 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
           vscode.Uri.from({ scheme: "workspace-list", path: workspacePath }),
         )
       }
+      return true // Status changed
     }
+    return false // No change
   }
 
-  async updateAllStatuses(workspacePaths: string[]): Promise<void> {
+  async updateAllStatuses(workspacePaths: string[]): Promise<string[]> {
     log(`Updating statuses for ${workspacePaths.length} workspaces`)
-    await Promise.all(workspacePaths.map((path) => this.updateStatus(path)))
-    // Fire event for all changed paths using cached URIs
-    const allChangedUris: vscode.Uri[] = []
-    for (const path of workspacePaths) {
-      const cachedUris = this.uriCache.get(path) || []
-      if (cachedUris.length > 0) {
-        allChangedUris.push(...cachedUris)
-      } else {
-        // Fallback if no cached URI
-        allChangedUris.push(vscode.Uri.from({ scheme: "workspace-list", path }))
+
+    // Update all statuses in parallel and track which ones changed
+    const results = await Promise.all(
+      workspacePaths.map(async (path) => ({
+        path,
+        changed: await this.updateStatus(path)
+      }))
+    )
+
+    // Return paths that actually changed
+    const changedPaths = results
+      .filter(r => r.changed)
+      .map(r => r.path)
+
+    if (changedPaths.length > 0) {
+      log(`${changedPaths.length} workspace(s) had status changes`)
+
+      // Also fire a batch update for all changed URIs
+      const allChangedUris: vscode.Uri[] = []
+      for (const path of changedPaths) {
+        const cachedUris = this.uriCache.get(path) || []
+        if (cachedUris.length > 0) {
+          allChangedUris.push(...cachedUris)
+        } else {
+          allChangedUris.push(vscode.Uri.from({ scheme: "workspace-list", path }))
+        }
       }
+
+      if (allChangedUris.length > 0) {
+        log(`Firing batch change for ${allChangedUris.length} URI(s)`)
+        this._onDidChangeFileDecorations.fire(allChangedUris)
+      }
+    } else {
+      log(`No status changes detected`)
     }
-    if (allChangedUris.length > 0) {
-      log(`Firing change for ${allChangedUris.length} total URI(s)`)
-      this._onDidChangeFileDecorations.fire(allChangedUris)
-    }
+
+    return changedPaths
   }
 
   dispose(): void {

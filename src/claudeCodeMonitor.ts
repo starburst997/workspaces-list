@@ -38,6 +38,8 @@ export class ClaudeCodeMonitor {
 
   private watchers: Map<string, vscode.FileSystemWatcher> = new Map()
   private conversationCache: Map<string, ConversationMetadata[]> = new Map()
+  private cacheTimestamps: Map<string, number> = new Map() // Track when cache was last updated
+  private readonly CACHE_TTL = 10000 // Cache for 10 seconds
 
   /**
    * Encode workspace path to match Claude's directory naming
@@ -189,11 +191,13 @@ export class ClaudeCodeMonitor {
     workspacePath: string,
   ): Promise<ConversationMetadata[]> {
     const cacheKey = workspacePath
+    const now = Date.now()
 
-    // Check cache first
-    if (this.conversationCache.has(cacheKey)) {
+    // Check if cache is still valid
+    const cacheTime = this.cacheTimestamps.get(cacheKey)
+    if (cacheTime && (now - cacheTime) < this.CACHE_TTL) {
       const cached = this.conversationCache.get(cacheKey) || []
-      log(`Using cached conversations (${cached.length}) for ${workspacePath}`)
+      log(`Using cached conversations (${cached.length}) for ${workspacePath}, age: ${now - cacheTime}ms`)
       return cached
     }
 
@@ -250,7 +254,9 @@ export class ClaudeCodeMonitor {
     log(
       `Total conversations found for ${workspacePath}: ${conversations.length}`,
     )
+    // Update cache with timestamp
     this.conversationCache.set(cacheKey, conversations)
+    this.cacheTimestamps.set(cacheKey, Date.now())
     return conversations
   }
 
@@ -521,17 +527,17 @@ export class ClaudeCodeMonitor {
       const watcher = vscode.workspace.createFileSystemWatcher(pattern)
 
       watcher.onDidChange(() => {
-        this.conversationCache.delete(workspacePath)
+        this.clearWorkspaceCache(workspacePath)
         onChange()
       })
 
       watcher.onDidCreate(() => {
-        this.conversationCache.delete(workspacePath)
+        this.clearWorkspaceCache(workspacePath)
         onChange()
       })
 
       watcher.onDidDelete(() => {
-        this.conversationCache.delete(workspacePath)
+        this.clearWorkspaceCache(workspacePath)
         onChange()
       })
 
@@ -549,6 +555,15 @@ export class ClaudeCodeMonitor {
    */
   clearCache(): void {
     this.conversationCache.clear()
+    this.cacheTimestamps.clear()
+  }
+
+  /**
+   * Clear cache for a specific workspace
+   */
+  clearWorkspaceCache(workspacePath: string): void {
+    this.conversationCache.delete(workspacePath)
+    this.cacheTimestamps.delete(workspacePath)
   }
 
   /**

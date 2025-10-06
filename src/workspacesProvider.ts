@@ -191,9 +191,7 @@ export class WorkspacesProvider
       }
 
       await this.updateClaudeCodeStatus()
-
-      // Refresh tree view to ensure decorations are updated
-      this._onDidChangeTreeData.fire()
+      // Tree refresh is now handled inside updateClaudeCodeStatus
     }, 5000)
 
     // Do an immediate update
@@ -206,7 +204,29 @@ export class WorkspacesProvider
   private async updateClaudeCodeStatus(): Promise<void> {
     const workspacePaths = this.workspaces.map((w) => w.path)
     if (workspacePaths.length > 0 && this.decorator) {
-      await this.decorator.updateAllStatuses(workspacePaths)
+      // Only log when there are actual changes to reduce noise
+      const changedPaths = await this.decorator.updateAllStatuses(workspacePaths)
+
+      if (changedPaths.length > 0) {
+        console.log(`[WorkspacesList] Status changed for ${changedPaths.length} workspace(s) at ${new Date().toLocaleTimeString()}`)
+
+        // Only refresh the tree items that actually changed
+        const changedItems = this.workspaces.filter(w => changedPaths.includes(w.path))
+
+        // Fire change events only for items that changed
+        for (const workspace of changedItems) {
+          this._onDidChangeTreeData.fire(workspace)
+        }
+
+        // If many items changed, also fire a general refresh
+        // This ensures the tree view fully updates when there are bulk changes
+        if (changedItems.length > 3) {
+          setTimeout(() => {
+            this._onDidChangeTreeData.fire()
+          }, 100)
+        }
+      }
+      // No logging when nothing changed - keeps console clean
     }
   }
 

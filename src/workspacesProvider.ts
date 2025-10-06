@@ -3,6 +3,7 @@ import { ClaudeCodeMonitor } from "./claudeCodeMonitor"
 import { ConfigReader, WorkspaceConfig } from "./configReader"
 import { IconRenderer } from "./iconRenderer"
 import { MacOSWindowManager, WindowInfo } from "./macosWindowManager"
+import { BrowserWindowManager } from "./browserWindowManager"
 import { ClaudeCodeDecorator } from "./claudeCodeDecorator"
 import { ClaudeCodeStatusInfo } from "./types"
 
@@ -12,6 +13,9 @@ export class WorkspaceItem extends vscode.TreeItem {
     public readonly path: string,
     public readonly windowInfo: WindowInfo,
     public readonly context: vscode.ExtensionContext,
+    public readonly itemType: "workspace" | "browser",
+    public readonly browserApp?: string,
+    public readonly browserWindowIndex?: number,
     public readonly config?: WorkspaceConfig,
     public readonly claudeStatus?: ClaudeCodeStatusInfo,
     iconPath?:
@@ -29,8 +33,8 @@ export class WorkspaceItem extends vscode.TreeItem {
     // Set resourceUri for decorations using custom scheme
     this.resourceUri = vscode.Uri.from({ scheme: "workspace-list", path })
 
-    // Apply custom background color from config if available
-    if (config?.color) {
+    // Apply custom background color from config if available (workspace only)
+    if (itemType === "workspace" && config?.color) {
       this.resourceUri = vscode.Uri.from({
         scheme: "workspace-list",
         path,
@@ -38,13 +42,19 @@ export class WorkspaceItem extends vscode.TreeItem {
       })
     }
 
-    this.tooltip = `${path}\n${windowInfo.appName}`
-    this.contextValue = "workspace"
+    // Set tooltip based on item type
+    if (itemType === "browser") {
+      this.tooltip = `${label}\n${browserApp || ""}`
+    } else {
+      this.tooltip = `${path}\n${windowInfo.appName}`
+    }
+
+    this.contextValue = itemType
 
     // Make items clickable
     this.command = {
       command: "workspacesList.focusWorkspace",
-      title: "Focus Workspace",
+      title: itemType === "browser" ? "Focus Browser Window" : "Focus Workspace",
       arguments: [this],
     }
   }
@@ -62,6 +72,7 @@ export class WorkspacesProvider
 
   private workspaces: WorkspaceItem[] = []
   private windowManager: MacOSWindowManager
+  private browserWindowManager: BrowserWindowManager
   private configReader: ConfigReader
   private iconRenderer: IconRenderer
   private claudeMonitor: ClaudeCodeMonitor
@@ -75,6 +86,7 @@ export class WorkspacesProvider
     decorator: ClaudeCodeDecorator,
   ) {
     this.windowManager = new MacOSWindowManager()
+    this.browserWindowManager = new BrowserWindowManager()
     this.configReader = new ConfigReader()
     this.iconRenderer = new IconRenderer()
     this.claudeMonitor = new ClaudeCodeMonitor()
@@ -106,10 +118,16 @@ export class WorkspacesProvider
   private async loadWorkspaces(): Promise<void> {
     console.log("[WorkspacesList] loadWorkspaces() called")
     try {
+      // Get workspace windows
       const windows = await this.windowManager.getOpenWindows()
-      console.log(`[WorkspacesList] Got ${windows.length} windows from manager`)
+      console.log(`[WorkspacesList] Got ${windows.length} workspace windows from manager`)
 
-      this.workspaces = await Promise.all(
+      // Get browser windows
+      const browserWindows = await this.browserWindowManager.getBrowserWindows()
+      console.log(`[WorkspacesList] Got ${browserWindows.length} browser windows`)
+
+      // Create workspace items
+      const workspaceItems = await Promise.all(
         windows.map(async (windowInfo) => {
           const name = this.windowManager.getWorkspaceName(windowInfo)
           const workspacePath =
@@ -144,14 +162,51 @@ export class WorkspacesProvider
             workspacePath,
             windowInfo,
             this.context,
+            "workspace",
+            undefined,
+            undefined,
             config,
             claudeStatus,
             iconPath,
           )
         }),
       )
+
+      // Create browser window items
+      const browserItems = browserWindows.map((browserWindow) => {
+        const label = browserWindow.title
+        const iconPath = browserWindow.app === "Safari"
+          ? new vscode.ThemeIcon("compass")
+          : new vscode.ThemeIcon("chrome-restore")
+
+        // Create a dummy WindowInfo for browser windows
+        const dummyWindowInfo: WindowInfo = {
+          appName: browserWindow.app,
+          windowTitle: browserWindow.title,
+          windowIndex: browserWindow.windowIndex,
+        }
+
+        console.log(`[WorkspacesList] Created browser item: ${label}`)
+
+        return new WorkspaceItem(
+          label,
+          browserWindow.title, // Use title as path for browser windows
+          dummyWindowInfo,
+          this.context,
+          "browser",
+          browserWindow.app,
+          browserWindow.windowIndex,
+          undefined,
+          undefined,
+          iconPath,
+        )
+      })
+
+      // Combine workspace and browser items
+      this.workspaces = [...workspaceItems, ...browserItems]
+
       console.log(
-        `[WorkspacesList] Total workspace items created: ${this.workspaces.length}`,
+        `[WorkspacesList] Total items created: ${this.workspaces.length} (${workspaceItems.length} workspaces, ${browserItems.length} browsers)`,
       )
     } catch (error: unknown) {
       console.error("[WorkspacesList] Failed to load workspaces:", error)
@@ -161,19 +216,34 @@ export class WorkspacesProvider
 
   async focusWorkspace(item: WorkspaceItem): Promise<void> {
     try {
-      // Mark as acknowledged so RecentlyFinished status changes to Running
-      this.decorator.markAsAcknowledged(item.path)
+      if (item.itemType === "browser") {
+        // Focus browser window
+        if (item.browserApp && item.browserWindowIndex) {
+          const success = await this.browserWindowManager.focusWindow(
+            item.browserApp,
+            item.browserWindowIndex,
+          )
+          if (!success) {
+            vscode.window.showErrorMessage(
+              `Failed to focus browser window: ${item.label}`,
+            )
+          }
+        }
+      } else {
+        // Mark as acknowledged so RecentlyFinished status changes to Running
+        this.decorator.markAsAcknowledged(item.path)
 
-      // Use VSCode's built-in command to switch to the workspace
-      // This opens the folder in a new window or switches to existing window
-      const uri = vscode.Uri.file(item.path)
-      await vscode.commands.executeCommand("vscode.openFolder", uri, {
-        forceReuseWindow: false,
-      })
+        // Use VSCode's built-in command to switch to the workspace
+        // This opens the folder in a new window or switches to existing window
+        const uri = vscode.Uri.file(item.path)
+        await vscode.commands.executeCommand("vscode.openFolder", uri, {
+          forceReuseWindow: false,
+        })
+      }
     } catch (error) {
       console.error("[WorkspacesList] Failed to focus workspace:", error)
       vscode.window.showErrorMessage(
-        `Failed to switch to workspace: ${item.label}`,
+        `Failed to switch to: ${item.label}`,
       )
     }
   }

@@ -22,20 +22,12 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "workspaces-explorer",
-          "title": "Workspaces",
-          "icon": "$(window)"
-        }
-      ]
-    },
     "views": {
-      "workspaces-explorer": [
+      "explorer": [
         {
           "id": "workspacesList",
-          "name": "Workspaces"
+          "name": "Workspaces",
+          "order": -1
         }
       ]
     },

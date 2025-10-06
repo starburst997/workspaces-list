@@ -17,16 +17,14 @@ export class IconRenderer {
     | undefined
   > {
     if (!iconConfig) {
-      // Default icon
-      return new vscode.ThemeIcon("folder")
+      // Default icon - use folder emoji for consistency with custom emoji icons
+      return this.createIconFromEmoji("📁", context)
     }
 
     // Check if it's an emoji (single character or emoji sequence)
     if (this.isEmoji(iconConfig)) {
-      // For emojis, we can use them directly as the label would include them
-      // But VSCode doesn't support emoji as icons directly, so we'll use a text file
-      // or just return a default icon and handle emoji in the label
-      return new vscode.ThemeIcon("symbol-misc")
+      // Convert emoji to SVG icon
+      return this.createIconFromEmoji(iconConfig, context)
     }
 
     // Check if it's SVG content
@@ -109,6 +107,19 @@ export class IconRenderer {
   }
 
   /**
+   * Create icon from emoji by converting to SVG
+   */
+  private async createIconFromEmoji(
+    emoji: string,
+    context: vscode.ExtensionContext,
+  ): Promise<vscode.Uri | undefined> {
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <text x="50" y="50" font-size="70" text-anchor="middle" dominant-baseline="central">${emoji}</text>
+    </svg>`
+    return this.createIconFromSvg(svgContent, context)
+  }
+
+  /**
    * Create icon from SVG content
    */
   private async createIconFromSvg(
@@ -150,10 +161,8 @@ export class IconRenderer {
   /**
    * Get emoji to prepend to label if icon is emoji
    */
-  getEmojiPrefix(iconConfig: string | undefined): string {
-    if (iconConfig && this.isEmoji(iconConfig)) {
-      return iconConfig + " "
-    }
+  getEmojiPrefix(): string {
+    // Emoji is now rendered as an icon, so no prefix needed
     return ""
   }
 }

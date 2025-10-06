@@ -18,7 +18,7 @@ export class WorkspaceItem extends vscode.TreeItem {
     public readonly context: vscode.ExtensionContext,
     public readonly config?: WorkspaceConfig,
     public readonly claudeStatus?: ClaudeCodeStatus,
-    public readonly iconPath?:
+    iconPath?:
       | vscode.ThemeIcon
       | vscode.Uri
       | { light: vscode.Uri; dark: vscode.Uri },
@@ -27,14 +27,14 @@ export class WorkspaceItem extends vscode.TreeItem {
   ) {
     super(label, collapsibleState)
 
-    this.tooltip = `${path}\n${windowInfo.appName}`
-    this.description = this.getDescription()
-    this.contextValue = "workspace"
+    // Explicitly set iconPath (ensure it's never undefined)
+    this.iconPath = iconPath || new vscode.ThemeIcon("folder")
 
-    // Apply color if configured
-    if (config?.color) {
-      this.resourceUri = vscode.Uri.parse(`workspace:${path}`)
-    }
+    // Set resourceUri for decorations
+    this.resourceUri = vscode.Uri.file(path)
+
+    this.tooltip = `${path}\n${windowInfo.appName}`
+    this.contextValue = "workspace"
 
     // Make items clickable
     this.command = {
@@ -42,19 +42,6 @@ export class WorkspaceItem extends vscode.TreeItem {
       title: "Focus Workspace",
       arguments: [this],
     }
-  }
-
-  private getDescription(): string {
-    if (this.claudeStatus === ClaudeCodeStatus.WaitingForInput) {
-      return "⚠️ Needs attention"
-    }
-    if (this.claudeStatus === ClaudeCodeStatus.Running) {
-      return "🔄 Running"
-    }
-    if (this.claudeStatus === ClaudeCodeStatus.Idle) {
-      return "✓ Idle"
-    }
-    return ""
   }
 }
 
@@ -73,24 +60,30 @@ export class WorkspacesProvider
   private configReader: ConfigReader
   private iconRenderer: IconRenderer
   private claudeMonitor: ClaudeCodeMonitor
+  private decorator: any // ClaudeCodeDecorator - using any to avoid circular import
   private monitoringInterval: NodeJS.Timeout | undefined
   private isWindowFocused: boolean = true
   private disposables: vscode.Disposable[] = []
 
-  constructor(private context: vscode.ExtensionContext) {
+  constructor(
+    private context: vscode.ExtensionContext,
+    decorator: any, // ClaudeCodeDecorator
+  ) {
     this.windowManager = new MacOSWindowManager()
     this.configReader = new ConfigReader()
     this.iconRenderer = new IconRenderer()
     this.claudeMonitor = new ClaudeCodeMonitor()
+    this.decorator = decorator
 
-    this.loadWorkspaces()
+    // Don't load workspaces here - let extension.ts trigger initial refresh
+    // this.loadWorkspaces()
     this.startMonitoring()
     this.setupFocusDetection()
   }
 
-  refresh(): void {
+  async refresh(): Promise<void> {
     console.log("[WorkspacesList] Refresh triggered")
-    this.loadWorkspaces()
+    await this.loadWorkspaces()
     this._onDidChangeTreeData.fire()
   }
 
@@ -135,7 +128,7 @@ export class WorkspacesProvider
           )
 
           // Get display name (from config or default)
-          const emojiPrefix = this.iconRenderer.getEmojiPrefix(config?.icon)
+          const emojiPrefix = this.iconRenderer.getEmojiPrefix()
           const displayName = config?.displayName || name
           const label = emojiPrefix + displayName
 
@@ -196,20 +189,9 @@ export class WorkspacesProvider
    * Update Claude Code status for all workspaces
    */
   private async updateClaudeCodeStatus(): Promise<void> {
-    let hasChanges = false
-
-    for (const workspace of this.workspaces) {
-      const newStatus = await this.claudeMonitor.getStatus(workspace.path)
-
-      if (newStatus !== workspace.claudeStatus) {
-        hasChanges = true
-      }
-    }
-
-    if (hasChanges) {
-      // Reload workspaces to update status
-      await this.loadWorkspaces()
-      this._onDidChangeTreeData.fire()
+    const workspacePaths = this.workspaces.map((w) => w.path)
+    if (workspacePaths.length > 0 && this.decorator) {
+      await this.decorator.updateAllStatuses(workspacePaths)
     }
   }
 

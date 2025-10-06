@@ -1,11 +1,20 @@
 import * as vscode from "vscode"
 import { WorkspacesProvider, WorkspaceItem } from "./workspacesProvider"
+import { ClaudeCodeDecorator } from "./claudeCodeDecorator"
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   console.log("Workspaces List extension is now active")
 
+  // Create the decorator
+  const decorator = new ClaudeCodeDecorator()
+
+  // Register the file decoration provider
+  const decorationProvider = vscode.window.registerFileDecorationProvider(
+    decorator,
+  )
+
   // Create the tree data provider
-  const workspacesProvider = new WorkspacesProvider(context)
+  const workspacesProvider = new WorkspacesProvider(context, decorator)
 
   // Register the tree view
   const treeView = vscode.window.createTreeView("workspacesList", {
@@ -29,10 +38,16 @@ export function activate(context: vscode.ExtensionContext) {
     },
   )
 
-  context.subscriptions.push(treeView, refreshCommand, focusCommand)
+  context.subscriptions.push(
+    treeView,
+    refreshCommand,
+    focusCommand,
+    decorationProvider,
+    decorator,
+  )
 
-  // Initial refresh
-  workspacesProvider.refresh()
+  // Initial refresh - wait for it to complete before continuing
+  await workspacesProvider.refresh()
 }
 
 export function deactivate() {

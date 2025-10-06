@@ -1,0 +1,6 @@
+{
+  "$schema": "./workspaces-list.schema.json",
+  "icon": "🚀",
+  "color": "#FF6B6B",
+  "displayName": "My Project"
+}

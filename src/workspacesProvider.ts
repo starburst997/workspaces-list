@@ -231,27 +231,25 @@ export class WorkspacesProvider
   }
 
   /**
-   * Setup window focus detection
+   * Setup window focus detection using native VSCode API
    */
   private setupFocusDetection(): void {
-    // Check focus every 2 seconds
-    const focusCheckInterval = setInterval(async () => {
-      const focused = await this.windowManager.isCurrentWindowFocused()
+    // Use VSCode's native window state API - no AppleScript needed!
+    this.isWindowFocused = vscode.window.state.focused
 
-      if (focused !== this.isWindowFocused) {
-        this.isWindowFocused = focused
+    const stateChangeDisposable = vscode.window.onDidChangeWindowState((state) => {
+      const wasFocused = this.isWindowFocused
+      this.isWindowFocused = state.focused
 
-        // If window just gained focus, immediately update
-        if (focused) {
-          await this.updateClaudeCodeStatus()
-        }
+      console.log(`[WorkspacesList] Window focus changed: ${wasFocused} -> ${state.focused}`)
+
+      // If window just gained focus, immediately update
+      if (state.focused && !wasFocused) {
+        this.updateClaudeCodeStatus()
       }
-    }, 2000)
-
-    // Add to disposables for cleanup
-    this.disposables.push({
-      dispose: () => clearInterval(focusCheckInterval),
     })
+
+    this.disposables.push(stateChangeDisposable)
   }
 
   /**

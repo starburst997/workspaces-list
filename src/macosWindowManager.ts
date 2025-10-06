@@ -131,12 +131,10 @@ export class MacOSWindowManager {
   }
 
   /**
-   * Check if the current window is focused
-   * Simplified to always return true to avoid AppleScript permission issues
+   * @deprecated No longer needed - use vscode.window.state.focused instead
+   * This method is kept for backwards compatibility but should not be used
    */
   async isCurrentWindowFocused(): Promise<boolean> {
-    // Always return true - the monitoring overhead is minimal
-    // and we avoid needing accessibility permissions
     return true
   }
 }

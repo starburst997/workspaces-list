@@ -1,8 +1,8 @@
-import * as vscode from "vscode"
+import { exec } from "child_process"
 import * as fs from "fs/promises"
 import * as path from "path"
-import { exec } from "child_process"
 import { promisify } from "util"
+import * as vscode from "vscode"
 import { ClaudeCodeStatus, ClaudeCodeStatusInfo } from "./types"
 
 const execAsync = promisify(exec)
@@ -10,7 +10,9 @@ const execAsync = promisify(exec)
 const DEBUG = false // Enable debug logging - set to true for debugging
 
 function log(...args: unknown[]): void {
-  if (!DEBUG) return
+  if (!DEBUG) {
+    return
+  }
   console.log("[ClaudeCodeMonitor]", ...args)
 }
 
@@ -57,7 +59,9 @@ export class ClaudeCodeMonitor {
   ): Promise<boolean> {
     try {
       // Get all Claude processes
-      const { stdout } = await execAsync("ps aux | grep -i claude | grep -v grep")
+      const { stdout } = await execAsync(
+        "ps aux | grep -i claude | grep -v grep",
+      )
       const lines = stdout.trim().split("\n")
 
       log(`Found ${lines.length} Claude process(es)`)
@@ -195,9 +199,11 @@ export class ClaudeCodeMonitor {
 
     // Check if cache is still valid
     const cacheTime = this.cacheTimestamps.get(cacheKey)
-    if (cacheTime && (now - cacheTime) < this.CACHE_TTL) {
+    if (cacheTime && now - cacheTime < this.CACHE_TTL) {
       const cached = this.conversationCache.get(cacheKey) || []
-      log(`Using cached conversations (${cached.length}) for ${workspacePath}, age: ${now - cacheTime}ms`)
+      log(
+        `Using cached conversations (${cached.length}) for ${workspacePath}, age: ${now - cacheTime}ms`,
+      )
       return cached
     }
 
@@ -315,7 +321,10 @@ export class ClaudeCodeMonitor {
         const entry = JSON.parse(line)
 
         // Skip file-history-snapshot and summary entries
-        if (entry.type === "file-history-snapshot" || entry.type === "summary") {
+        if (
+          entry.type === "file-history-snapshot" ||
+          entry.type === "summary"
+        ) {
           continue
         }
 
@@ -404,10 +413,11 @@ export class ClaudeCodeMonitor {
           // Look for signs of waiting for permission or input
           const content = JSON.stringify(msg.content).toLowerCase()
           if (
-            content.includes("permission") ||
-            content.includes("approve") ||
-            content.includes("confirm") ||
-            content.includes("user-prompt-submit-hook")
+            //content.includes("permission") ||
+            //content.includes("approve") ||
+            //content.includes("confirm") ||
+            //content.includes("user-prompt-submit-hook")
+            content.includes("tool_use")
           ) {
             log(`Detected waiting for input in conversation`)
             return { isWaiting: true, lastMessageTime: convo.lastModified }
@@ -429,7 +439,9 @@ export class ClaudeCodeMonitor {
     const now = Date.now()
     const thirtySecondsAgo = now - 30 * 1000
 
-    log(`Checking for executing... (now: ${now}, threshold: ${thirtySecondsAgo})`)
+    log(
+      `Checking for executing... (now: ${now}, threshold: ${thirtySecondsAgo})`,
+    )
 
     for (const convo of conversations) {
       const ageSeconds = Math.round((now - convo.lastModified) / 1000)
@@ -438,9 +450,7 @@ export class ClaudeCodeMonitor {
       )
 
       if (convo.lastModified > thirtySecondsAgo) {
-        log(
-          `✓ Detected executing conversation (modified ${ageSeconds}s ago)`,
-        )
+        log(`✓ Detected executing conversation (modified ${ageSeconds}s ago)`)
         return { isExecuting: true, lastMessageTime: convo.lastModified }
       }
     }

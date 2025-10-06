@@ -88,7 +88,7 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
       const decoration = {
         badge: "⚠️",
         tooltip: `Claude Code: Waiting for Input (${statusInfo.conversationCount || 0} session${(statusInfo.conversationCount || 0) > 1 ? "s" : ""})`,
-        color: new vscode.ThemeColor("statusBarItem.warningBackground"),
+        color: new vscode.ThemeColor("errorForeground"),
       }
       log(`Returning WaitingForInput decoration:`, decoration)
       return decoration

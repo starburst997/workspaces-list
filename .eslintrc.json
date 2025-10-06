@@ -11,8 +11,8 @@
     "plugin:@typescript-eslint/recommended"
   ],
   "rules": {
-    "@typescript-eslint/naming-convention": "warn",
-    "@typescript-eslint/semi": "warn",
+    "@typescript-eslint/naming-convention": "off",
+    "@typescript-eslint/semi": "off",
     "curly": "warn",
     "eqeqeq": "warn",
     "no-throw-literal": "warn",

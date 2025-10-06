@@ -1,6 +1,6 @@
-import * as vscode from "vscode"
-import * as path from "path"
 import * as fs from "fs/promises"
+import * as path from "path"
+import * as vscode from "vscode"
 
 export class IconRenderer {
   /**
@@ -17,8 +17,9 @@ export class IconRenderer {
     | undefined
   > {
     if (!iconConfig) {
-      // Default icon - use folder emoji for consistency with custom emoji icons
-      return this.createIconFromEmoji("📁", context)
+      // Default icon - try different codicons
+      return new vscode.ThemeIcon("symbol-folder") // Try this instead of "folder"
+      //return this.createIconFromEmoji("📁", context)
     }
 
     // Check if it's an emoji (single character or emoji sequence)

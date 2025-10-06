@@ -19,6 +19,11 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
   provideFileDecoration(
     uri: vscode.Uri,
   ): vscode.ProviderResult<vscode.FileDecoration> {
+    // Only provide decorations for our custom scheme
+    if (uri.scheme !== "workspace-list") {
+      return undefined
+    }
+
     const workspacePath = uri.fsPath
     const status = this.statusCache.get(workspacePath)
 
@@ -53,15 +58,19 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
 
     if (status !== oldStatus) {
       this.statusCache.set(workspacePath, status)
-      // Trigger decoration update
-      this._onDidChangeFileDecorations.fire(vscode.Uri.file(workspacePath))
+      // Trigger decoration update with custom scheme
+      this._onDidChangeFileDecorations.fire(
+        vscode.Uri.from({ scheme: "workspace-list", path: workspacePath }),
+      )
     }
   }
 
   async updateAllStatuses(workspacePaths: string[]): Promise<void> {
     await Promise.all(workspacePaths.map((path) => this.updateStatus(path)))
-    // Fire event for all changed paths
-    const changedUris = workspacePaths.map((path) => vscode.Uri.file(path))
+    // Fire event for all changed paths with custom scheme
+    const changedUris = workspacePaths.map((path) =>
+      vscode.Uri.from({ scheme: "workspace-list", path }),
+    )
     this._onDidChangeFileDecorations.fire(changedUris)
   }
 

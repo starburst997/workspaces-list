@@ -26,8 +26,8 @@ export class WorkspaceItem extends vscode.TreeItem {
     // Explicitly set iconPath (ensure it's never undefined)
     this.iconPath = iconPath || new vscode.ThemeIcon("folder")
 
-    // Set resourceUri for decorations
-    this.resourceUri = vscode.Uri.file(path)
+    // Set resourceUri for decorations using custom scheme
+    this.resourceUri = vscode.Uri.from({ scheme: "workspace-list", path })
 
     this.tooltip = `${path}\n${windowInfo.appName}`
     this.contextValue = "workspace"

@@ -79,6 +79,7 @@ export class WorkspacesProvider implements vscode.TreeDataProvider<WorkspaceItem
 	}
 
 	refresh(): void {
+		console.log('[WorkspacesList] Refresh triggered');
 		this.loadWorkspaces();
 		this._onDidChangeTreeData.fire();
 	}
@@ -95,13 +96,16 @@ export class WorkspacesProvider implements vscode.TreeDataProvider<WorkspaceItem
 	}
 
 	private async loadWorkspaces(): Promise<void> {
+		console.log('[WorkspacesList] loadWorkspaces() called');
 		try {
 			const windows = await this.windowManager.getOpenWindows();
+			console.log(`[WorkspacesList] Got ${windows.length} windows from manager`);
 
 			this.workspaces = await Promise.all(
 				windows.map(async (windowInfo) => {
 					const name = this.windowManager.getWorkspaceName(windowInfo);
 					const workspacePath = windowInfo.workspacePath || windowInfo.windowTitle;
+					console.log(`[WorkspacesList] Processing window: ${name} at ${workspacePath}`);
 
 					// Load config if available
 					const config = await this.configReader.readConfig(workspacePath) || undefined;
@@ -121,6 +125,8 @@ export class WorkspacesProvider implements vscode.TreeDataProvider<WorkspaceItem
 					const displayName = config?.displayName || name;
 					const label = emojiPrefix + displayName;
 
+					console.log(`[WorkspacesList] Created workspace item: ${label}`);
+
 					return new WorkspaceItem(
 						label,
 						workspacePath,
@@ -132,20 +138,40 @@ export class WorkspacesProvider implements vscode.TreeDataProvider<WorkspaceItem
 					);
 				})
 			);
-		} catch (error) {
-			console.error('Failed to load workspaces:', error);
+			console.log(`[WorkspacesList] Total workspace items created: ${this.workspaces.length}`);
+		} catch (error: any) {
+			console.error('[WorkspacesList] Failed to load workspaces:', error);
+
+			// Show user-friendly error for accessibility permissions
+			if (error.message === 'ACCESSIBILITY_PERMISSION_REQUIRED') {
+				vscode.window.showErrorMessage(
+					'Workspaces List requires Accessibility permissions to detect windows. Click "Open Settings" to grant access, then restart Cursor/VSCode.',
+					'Open Settings',
+					'Learn More'
+				).then(selection => {
+					if (selection === 'Open Settings') {
+						// Try newer macOS 13+ URL first, fall back to older
+						const settingsUrl = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility';
+						vscode.env.openExternal(vscode.Uri.parse(settingsUrl));
+					} else if (selection === 'Learn More') {
+						vscode.env.openExternal(vscode.Uri.parse('https://support.apple.com/guide/mac-help/allow-accessibility-apps-to-access-your-mac-mh43185/mac'));
+					}
+				});
+			}
+
 			this.workspaces = [];
 		}
 	}
 
 	async focusWorkspace(item: WorkspaceItem): Promise<void> {
-		const success = await this.windowManager.focusWindow(
-			item.windowInfo.appName,
-			item.windowInfo.windowIndex
-		);
-
-		if (!success) {
-			vscode.window.showErrorMessage(`Failed to focus workspace: ${item.label}`);
+		try {
+			// Use VSCode's built-in command to switch to the workspace
+			// This opens the folder in a new window or switches to existing window
+			const uri = vscode.Uri.file(item.path);
+			await vscode.commands.executeCommand('vscode.openFolder', uri, { forceReuseWindow: false });
+		} catch (error) {
+			console.error('[WorkspacesList] Failed to focus workspace:', error);
+			vscode.window.showErrorMessage(`Failed to switch to workspace: ${item.label}`);
 		}
 	}
 

@@ -1,6 +1,7 @@
+import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import * as path from 'path';
+import * as fs from 'fs/promises';
 
 const execAsync = promisify(exec);
 
@@ -8,145 +9,118 @@ export interface WindowInfo {
 	appName: string;
 	windowTitle: string;
 	windowIndex: number;
+	windowId?: string;
 	workspacePath?: string;
 }
 
 export class MacOSWindowManager {
-	private readonly supportedApps = ['Visual Studio Code', 'Code', 'Cursor'];
-
 	/**
-	 * Get all open VSCode and Cursor windows
+	 * Get all open Cursor/VSCode windows by reading workspace storage
+	 * from the main Cursor process
 	 */
 	async getOpenWindows(): Promise<WindowInfo[]> {
-		const windows: WindowInfo[] = [];
-
-		for (const appName of this.supportedApps) {
-			try {
-				const appWindows = await this.getWindowsForApp(appName);
-				windows.push(...appWindows);
-			} catch (error) {
-				// App might not be running, continue to next
-				continue;
-			}
-		}
-
-		return windows;
-	}
-
-	/**
-	 * Get all windows for a specific application
-	 */
-	private async getWindowsForApp(appName: string): Promise<WindowInfo[]> {
-		const script = `
-			tell application "System Events"
-				if not (exists process "${appName}") then
-					error "Application not running"
-				end if
-
-				tell process "${appName}"
-					set windowList to every window
-					set windowCount to count of windowList
-					set windowTitles to {}
-
-					repeat with i from 1 to windowCount
-						set windowTitle to name of window i
-						set end of windowTitles to windowTitle
-					end repeat
-
-					return windowTitles
-				end tell
-			end tell
-		`;
+		console.log('[WorkspacesList] Starting window detection...');
 
 		try {
-			const { stdout } = await execAsync(`osascript -e '${script.replace(/'/g, "'\\''")}'`);
+			// Find main Cursor process
+			const { stdout: psOut } = await execAsync(
+				'ps aux | grep "Cursor.app/Contents/MacOS/Cursor" | grep -v grep | grep -v Helper'
+			);
+			const lines = psOut.trim().split('\n');
 
-			// Parse the AppleScript output (comma-separated list)
-			const titles = stdout.trim().split(', ').filter(t => t.length > 0);
+			if (lines.length === 0) {
+				console.log('[WorkspacesList] Main Cursor process not found');
+				return [];
+			}
 
-			return titles.map((title, index) => ({
-				appName,
-				windowTitle: title,
-				windowIndex: index + 1, // AppleScript uses 1-based indexing
-				workspacePath: this.extractWorkspacePathFromTitle(title)
-			}));
-		} catch (error) {
+			// Extract PID
+			const pidMatch = lines[0].match(/^\S+\s+(\d+)/);
+			if (!pidMatch) {
+				console.log('[WorkspacesList] Could not extract PID');
+				return [];
+			}
+
+			const mainPid = pidMatch[1];
+			console.log(`[WorkspacesList] Main Cursor PID: ${mainPid}`);
+
+			// Get workspace storage files opened by main process
+			const { stdout: lsofOut } = await execAsync(
+				`lsof -p ${mainPid} 2>/dev/null | grep "workspaceStorage.*state.vscdb"`
+			);
+
+			const storageHashes = lsofOut.trim().split('\n').map(line => {
+				const match = line.match(/workspaceStorage\/([a-f0-9]+)\//);
+				return match ? match[1] : null;
+			}).filter(h => h !== null) as string[];
+
+			console.log(`[WorkspacesList] Found ${storageHashes.length} workspace storage hashes`);
+
+			// Read workspace path for each hash
+			const windows: WindowInfo[] = [];
+			for (let i = 0; i < storageHashes.length; i++) {
+				const workspacePath = await this.getWorkspaceFromHash(storageHashes[i]);
+				if (workspacePath) {
+					windows.push({
+						appName: 'Cursor',
+						windowTitle: path.basename(workspacePath),
+						windowIndex: i + 1,
+						windowId: storageHashes[i],
+						workspacePath: workspacePath
+					});
+				}
+			}
+
+			console.log(`[WorkspacesList] Found ${windows.length} workspaces`);
+			return windows;
+		} catch (error: any) {
+			console.error('[WorkspacesList] Error getting windows:', error);
 			return [];
 		}
 	}
 
 	/**
-	 * Focus a specific window
+	 * Get workspace path from storage hash
 	 */
-	async focusWindow(appName: string, windowIndex: number): Promise<boolean> {
-		const script = `
-			tell application "${appName}"
-				activate
-			end tell
-
-			tell application "System Events"
-				tell process "${appName}"
-					try
-						set frontmost to true
-						perform action "AXRaise" of window ${windowIndex}
-					end try
-				end tell
-			end tell
-		`;
-
+	private async getWorkspaceFromHash(hash: string): Promise<string | null> {
 		try {
-			await execAsync(`osascript -e '${script.replace(/'/g, "'\\''")}'`);
-			return true;
-		} catch (error) {
-			console.error('Failed to focus window:', error);
-			return false;
-		}
-	}
+			const workspaceJsonPath = path.join(
+				process.env.HOME || '',
+				'Library/Application Support/Cursor/User/workspaceStorage',
+				hash,
+				'workspace.json'
+			);
 
-	/**
-	 * Extract workspace path from window title
-	 * VSCode/Cursor window titles typically follow patterns like:
-	 * - "workspace-name — /path/to/workspace"
-	 * - "file.txt — workspace-name"
-	 * - "/path/to/workspace"
-	 */
-	private extractWorkspacePathFromTitle(title: string): string | undefined {
-		// Try to extract path from title
-		// Pattern 1: "name — /path/to/workspace"
-		const pathMatch = title.match(/— (.+)$/);
-		if (pathMatch) {
-			const potentialPath = pathMatch[1];
-			// Check if it looks like a path (starts with / or ~)
-			if (potentialPath.startsWith('/') || potentialPath.startsWith('~')) {
-				return potentialPath;
+			const content = await fs.readFile(workspaceJsonPath, 'utf-8');
+			const data = JSON.parse(content);
+
+			if (data.folder) {
+				let folderPath = data.folder;
+				if (folderPath.startsWith('file://')) {
+					folderPath = decodeURIComponent(folderPath.replace('file://', ''));
+				}
+				return folderPath;
 			}
+		} catch (error) {
+			// Skip invalid workspaces
 		}
-
-		// Pattern 2: Title is just a path
-		if (title.startsWith('/') || title.startsWith('~')) {
-			return title;
-		}
-
-		// Pattern 3: Extract workspace name as fallback
-		const workspaceMatch = title.match(/^([^—]+)/);
-		if (workspaceMatch) {
-			return workspaceMatch[1].trim();
-		}
-
-		return undefined;
+		return null;
 	}
 
 	/**
-	 * Get the friendly workspace name from a path or title
+	 * Focus a specific window by workspace path
+	 * Uses VSCode's openFolder command which is more reliable than AppleScript
+	 */
+	async focusWindow(workspacePath: string): Promise<boolean> {
+		// This method is called from the extension context,
+		// so the actual switching is handled by vscode.commands.executeCommand
+		// We return true here, and the provider will handle the command
+		return true;
+	}
+
+	/**
+	 * Get the friendly workspace name
 	 */
 	getWorkspaceName(windowInfo: WindowInfo): string {
-		if (windowInfo.workspacePath) {
-			// If it's a path, return the last component
-			if (windowInfo.workspacePath.startsWith('/') || windowInfo.workspacePath.startsWith('~')) {
-				return path.basename(windowInfo.workspacePath);
-			}
-			return windowInfo.workspacePath;
-		}
 		return windowInfo.windowTitle;
 	}
 
@@ -154,7 +128,6 @@ export class MacOSWindowManager {
 	 * Check if the current window is focused
 	 */
 	async isCurrentWindowFocused(): Promise<boolean> {
-		// Check if VSCode or Cursor is the frontmost application
 		const script = `
 			tell application "System Events"
 				set frontApp to name of first application process whose frontmost is true
@@ -165,7 +138,7 @@ export class MacOSWindowManager {
 		try {
 			const { stdout } = await execAsync(`osascript -e '${script.replace(/'/g, "'\\''")}'`);
 			const frontApp = stdout.trim();
-			return this.supportedApps.some(app => frontApp.includes(app));
+			return frontApp.includes('Cursor') || frontApp.includes('Code');
 		} catch (error) {
 			return false;
 		}

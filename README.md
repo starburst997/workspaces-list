@@ -1,5 +1,9 @@
 # Workspaces List
 
+<p align="center">
+  <img src="icon.png" alt="Workspaces List Icon" width="128">
+</p>
+
 [![Visual Studio Marketplace](https://img.shields.io/badge/Visual%20Studio%20Marketplace-Install-blue?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=jdboivin.workspaces-list)
 [![Open VSX Registry](https://img.shields.io/badge/Open%20VSX%20Registry-Install-orange?style=flat-square&logo=eclipse-ide)](https://open-vsx.org/extension/jdboivin/workspaces-list)
 

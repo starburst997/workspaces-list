@@ -3,6 +3,8 @@
 [![Visual Studio Marketplace](https://img.shields.io/badge/Visual%20Studio%20Marketplace-Install-blue?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=jdboivin.workspaces-list)
 [![Open VSX Registry](https://img.shields.io/badge/Open%20VSX%20Registry-Install-orange?style=flat-square&logo=eclipse-ide)](https://open-vsx.org/extension/jdboivin/workspaces-list)
 
+> ⚠️ **macOS Only**: This extension currently only works on macOS as it uses native macOS window detection via AppleScript.
+
 A VSCode/Cursor extension that lists all currently opened workspaces in a sidebar with Claude Code session status monitoring.
 
 **Install from:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=jdboivin.workspaces-list) | [Open VSX Registry](https://open-vsx.org/extension/jdboivin/workspaces-list)
@@ -29,12 +31,12 @@ Displays all open VSCode/Cursor windows in the sidebar. Click any workspace to s
 
 Automatically monitors Claude Code activity in all workspaces and displays status badges:
 
-- **WaitingForInput**: Claude needs your approval or input
-- **Executing**: Claude is actively working (recent file activity)
-- **RecentlyFinished**: Claude completed a task (shows time-based color gradient)
-- **Running**: Claude process is running but idle
-- **NotRunning**: No active Claude process
-- **NoSession**: No Claude conversation found
+- 🔴 **<span style="color:#FF8A6B">WaitingForInput</span>**: Claude needs your approval or input (orange/red)
+- 🟠 **<span style="color:#FF8A6B">Executing</span>**: Claude is actively working on tasks (orange)
+- 🟢 **<span style="color:#89D185">RecentlyFinished</span>**: Claude completed a task (green gradient fading over 30 minutes)
+- 🔵 **Running**: Claude process is running but idle
+- ⚫ **NotRunning**: No active Claude process
+- ⚪ **NoSession**: No Claude conversation found
 
 Status updates occur at configurable intervals only when the extension window is focused.
 

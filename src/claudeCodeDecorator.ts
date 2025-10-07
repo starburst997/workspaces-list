@@ -99,7 +99,7 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
       const decoration = {
         badge: "▶",
         tooltip: `Claude Code: Executing Task (${statusInfo.conversationCount || 0} session${(statusInfo.conversationCount || 0) > 1 ? "s" : ""})`,
-        color: new vscode.ThemeColor("workspacesList.claudeOrange"), // Claude Code orange
+        color: new vscode.ThemeColor("workspacesList.claudeOrange"),
       }
       log(`Returning Executing decoration:`, decoration)
       return decoration

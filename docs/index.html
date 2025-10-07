@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      Workspaces List - Manage Multiple VSCode/Cursor Workspaces with AI
+      Monitoring
+    </title>
+    <meta
+      name="description"
+      content="A productivity extension for managing multiple VSCode/Cursor workspaces with real-time Claude Code status monitoring. Never lose track of your AI assistant again."
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+      }
+
+      .hero-background {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        z-index: -1;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+
+      header {
+        padding: 2rem 0;
+        text-align: center;
+        color: white;
+      }
+
+      .hero {
+        padding: 4rem 0 6rem;
+        text-align: center;
+        color: white;
+      }
+
+      .logo {
+        width: 128px;
+        height: 128px;
+        margin: 0 auto 2rem;
+        filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.2));
+        border-radius: 20px;
+      }
+
+      h1 {
+        font-size: 3.5rem;
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+        background: linear-gradient(to right, #fff, rgba(255, 255, 255, 0.9));
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .tagline {
+        font-size: 1.5rem;
+        margin-bottom: 2rem;
+        opacity: 0.95;
+        max-width: 700px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .cta-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 2rem;
+      }
+
+      .btn {
+        display: inline-block;
+        padding: 0.875rem 2rem;
+        border-radius: 50px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        font-size: 1.1rem;
+      }
+
+      .btn-primary {
+        background: white;
+        color: #667eea;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 30px rgba(0, 0, 0, 0.2);
+      }
+
+      .btn-secondary {
+        background: transparent;
+        color: white;
+        border: 2px solid white;
+      }
+
+      .btn-secondary:hover {
+        background: white;
+        color: #667eea;
+      }
+
+      .platform-notice {
+        background: rgba(255, 255, 255, 0.15);
+        padding: 0.75rem 1.5rem;
+        border-radius: 10px;
+        display: inline-block;
+        margin-top: 1rem;
+        backdrop-filter: blur(10px);
+      }
+
+      .features-section {
+        background: white;
+        border-radius: 20px 20px 0 0;
+        padding: 5rem 0;
+        margin-top: -2rem;
+        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.1);
+      }
+
+      .features {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 3rem;
+        margin-top: 3rem;
+      }
+
+      .feature {
+        text-align: center;
+        padding: 1.5rem;
+      }
+
+      .feature-icon {
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        font-size: 1.8rem;
+      }
+
+      .feature h3 {
+        font-size: 1.3rem;
+        margin-bottom: 1rem;
+        color: #333;
+      }
+
+      .feature p {
+        color: #666;
+        line-height: 1.7;
+      }
+
+      .section-title {
+        text-align: center;
+        font-size: 2.5rem;
+        color: #333;
+        margin-bottom: 1rem;
+      }
+
+      .section-subtitle {
+        text-align: center;
+        color: #666;
+        font-size: 1.2rem;
+        max-width: 600px;
+        margin: 0 auto;
+      }
+
+      .status-section {
+        background: #f8f9fa;
+        padding: 4rem 0;
+      }
+
+      .status-list {
+        max-width: 800px;
+        margin: 3rem auto 0;
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      }
+
+      .status-item {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        padding: 1rem;
+        border-bottom: 1px solid #eee;
+      }
+
+      .status-item:last-child {
+        border-bottom: none;
+      }
+
+      .status-indicator {
+        font-size: 1.5rem;
+        flex-shrink: 0;
+        width: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .status-content {
+        flex: 1;
+      }
+
+      .status-name {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 0.25rem;
+      }
+
+      .status-desc {
+        color: #666;
+        font-size: 0.95rem;
+      }
+
+      .screenshot-section {
+        background: white;
+        padding: 4rem 0;
+      }
+
+      .screenshot-container {
+        max-width: 900px;
+        margin: 3rem auto 0;
+        text-align: center;
+      }
+
+      .screenshot-container img {
+        width: 100%;
+        border-radius: 15px;
+        box-shadow: 0 10px 50px rgba(0, 0, 0, 0.15);
+      }
+
+      .settings-section {
+        background: #f8f9fa;
+        padding: 4rem 0;
+      }
+
+      .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 2rem;
+        margin-top: 2rem;
+      }
+
+      .setting-card {
+        background: white;
+        border-radius: 10px;
+        padding: 2rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .setting-name {
+        font-family: "Monaco", monospace;
+        font-size: 0.95rem;
+        color: #667eea;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+      }
+
+      .setting-type {
+        display: inline-block;
+        background: #e8f5ff;
+        color: #0066cc;
+        padding: 0.25rem 0.75rem;
+        border-radius: 5px;
+        font-size: 0.85rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .setting-desc {
+        color: #666;
+        margin-bottom: 0.5rem;
+        line-height: 1.6;
+      }
+
+      .setting-default {
+        font-size: 0.9rem;
+        color: #999;
+        font-style: italic;
+      }
+
+      footer {
+        background: white;
+        padding: 3rem 0;
+        text-align: center;
+        color: #666;
+        border-top: 1px solid #eee;
+      }
+
+      footer a {
+        color: #667eea;
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      footer a:hover {
+        text-decoration: underline;
+      }
+
+      @media (max-width: 768px) {
+        h1 {
+          font-size: 2.5rem;
+        }
+
+        .tagline {
+          font-size: 1.2rem;
+        }
+
+        .features {
+          grid-template-columns: 1fr;
+          gap: 2rem;
+        }
+
+        .cta-buttons {
+          flex-direction: column;
+        }
+
+        .settings-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="hero-background"></div>
+
+    <header>
+      <div class="container">
+        <nav>
+          <a
+            href="https://github.com/starburst997/workspaces-list"
+            class="btn btn-secondary"
+          >
+            View on GitHub →
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="container">
+        <img src="../icon.png" alt="Workspaces List Logo" class="logo" />
+        <h1>Workspaces List</h1>
+        <p class="tagline">
+          Never lose track of Claude again. Manage multiple VSCode/Cursor
+          workspaces with real-time AI status monitoring.
+        </p>
+        <div class="cta-buttons">
+          <a
+            href="https://marketplace.visualstudio.com/items?itemName=jdboivin.workspaces-list"
+            class="btn btn-primary"
+          >
+            📦 Install from VS Code Marketplace
+          </a>
+          <a
+            href="https://open-vsx.org/extension/jdboivin/workspaces-list"
+            class="btn btn-primary"
+          >
+            📦 Install from Open VSX
+          </a>
+        </div>
+        <div class="platform-notice">
+          ⚠️ macOS only (uses native window detection)
+        </div>
+      </div>
+    </section>
+
+    <section class="features-section">
+      <div class="container">
+        <h2 class="section-title">Why You Need This</h2>
+        <p class="section-subtitle">
+          Working with multiple Cursor instances? Stay organized and productive.
+        </p>
+
+        <div class="features">
+          <div class="feature">
+            <div class="feature-icon">🪟</div>
+            <h3>Unified Workspace View</h3>
+            <p>
+              See all your open VSCode and Cursor windows in one place. Click
+              any workspace to instantly switch focus.
+            </p>
+          </div>
+
+          <div class="feature">
+            <div class="feature-icon">🤖</div>
+            <h3>Claude Status Tracking</h3>
+            <p>
+              Real-time monitoring of Claude Code sessions. Know exactly which
+              workspace needs your attention.
+            </p>
+          </div>
+
+          <div class="feature">
+            <div class="feature-icon">⚡</div>
+            <h3>Smart Performance</h3>
+            <p>
+              Focus-aware monitoring ensures minimal resource usage. Only
+              updates when you're actively looking.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="status-section">
+      <div class="container">
+        <h2 class="section-title">Claude Status at a Glance</h2>
+        <p class="section-subtitle">
+          Visual indicators show you exactly what Claude is doing
+        </p>
+
+        <div class="status-list">
+          <div class="status-item">
+            <div class="status-indicator" style="color: #f14c4c">⚠️</div>
+            <div class="status-content">
+              <div class="status-name" style="color: #f14c4c">
+                WaitingForInput
+              </div>
+              <div class="status-desc">
+                Claude needs your approval or input to continue
+              </div>
+            </div>
+          </div>
+
+          <div class="status-item">
+            <div class="status-indicator" style="color: #ff8a6b">▶</div>
+            <div class="status-content">
+              <div class="status-name" style="color: #ff8a6b">Executing</div>
+              <div class="status-desc">Claude is actively working on tasks</div>
+            </div>
+          </div>
+
+          <div class="status-item">
+            <div class="status-indicator" style="color: #89d185">◉</div>
+            <div class="status-content">
+              <div class="status-name" style="color: #89d185">
+                RecentlyFinished
+              </div>
+              <div class="status-desc">
+                Claude completed a task (color gradient fades over 30 minutes)
+              </div>
+            </div>
+          </div>
+
+          <div class="status-item">
+            <div class="status-indicator" style="color: #2472c8">●</div>
+            <div class="status-content">
+              <div class="status-name" style="color: #2472c8">Running</div>
+              <div class="status-desc">Claude process is running but idle</div>
+            </div>
+          </div>
+
+          <div class="status-item">
+            <div class="status-indicator" style="color: #999">○</div>
+            <div class="status-content">
+              <div class="status-name" style="color: #999">NotRunning</div>
+              <div class="status-desc">No active Claude process detected</div>
+            </div>
+          </div>
+
+          <div class="status-item">
+            <div class="status-indicator" style="color: #ccc">○</div>
+            <div class="status-content">
+              <div class="status-name" style="color: #999">NoSession</div>
+              <div class="status-desc">
+                No Claude conversation found in this workspace
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screenshot-section">
+      <div class="container">
+        <h2 class="section-title">See It In Action</h2>
+        <p class="section-subtitle">
+          Clean, intuitive interface that stays out of your way
+        </p>
+
+        <div class="screenshot-container">
+          <img
+            src="screenshot.png"
+            alt="Workspaces List Screenshot"
+            style="width: 50%"
+          />
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-section">
+      <div class="container">
+        <h2 class="section-title">Configuration</h2>
+        <p class="section-subtitle">
+          All settings are optional - works great out of the box
+        </p>
+
+        <div class="settings-grid">
+          <div class="setting-card">
+            <div class="setting-name">workspacesList.statusMonitorInterval</div>
+            <div class="setting-type">number (milliseconds)</div>
+            <div class="setting-desc">
+              How often to check Claude Code status. Lower values provide faster
+              updates but use more resources.
+            </div>
+            <div class="setting-default">Default: 5000 (5 seconds)</div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-name">
+              workspacesList.processMonitorInterval
+            </div>
+            <div class="setting-type">number (milliseconds)</div>
+            <div class="setting-desc">
+              How often to scan for Claude Code processes. This detects when
+              Claude starts or stops running.
+            </div>
+            <div class="setting-default">Default: 30000 (30 seconds)</div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-name">workspacesList.executingThreshold</div>
+            <div class="setting-type">number (milliseconds)</div>
+            <div class="setting-desc">
+              Time threshold for detecting executing status. File activity
+              within this window indicates Claude is actively working.
+            </div>
+            <div class="setting-default">Default: 30000 (30 seconds)</div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-name">workspacesList.waitingMessageAge</div>
+            <div class="setting-type">number (milliseconds)</div>
+            <div class="setting-desc">
+              Minimum age for assistant messages to be considered as waiting for
+              input. Prevents false positives during rapid execution.
+            </div>
+            <div class="setting-default">Default: 10000 (10 seconds)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="container">
+        <p>
+          <a href="https://github.com/starburst997/workspaces-list">GitHub</a> •
+          <a href="https://github.com/starburst997/workspaces-list/issues"
+            >Issues</a
+          >
+          •
+          <a href="https://github.com/starburst997/workspaces-list/releases"
+            >Releases</a
+          >
+          •
+          <a
+            href="https://marketplace.visualstudio.com/items?itemName=jdboivin.workspaces-list"
+            >VS Code Marketplace</a
+          >
+          •
+          <a href="https://open-vsx.org/extension/jdboivin/workspaces-list"
+            >Open VSX</a
+          >
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

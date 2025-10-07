@@ -3,6 +3,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import { promisify } from "util"
 import * as vscode from "vscode"
+import { outputChannel } from "./extension"
 import { ClaudeCodeStatus, ClaudeCodeStatusInfo } from "./types"
 
 const execAsync = promisify(exec)
@@ -13,12 +14,12 @@ function log(...args: unknown[]): void {
   if (!DEBUG) {
     return
   }
-  console.log("[ClaudeCodeMonitor]", ...args)
+  outputChannel.appendLine(`[ClaudeCodeMonitor] ${args.join(" ")}`)
 }
 
 // Log only important events (always shown)
 function logEvent(...args: unknown[]): void {
-  console.log("[ClaudeCodeMonitor]", ...args)
+  outputChannel.appendLine(`[ClaudeCodeMonitor] ${args.join(" ")}`)
 }
 
 interface ClaudeMessage {

@@ -2,8 +2,11 @@ import * as vscode from "vscode"
 import { WorkspacesProvider, WorkspaceItem } from "./workspacesProvider"
 import { ClaudeCodeDecorator } from "./claudeCodeDecorator"
 
+// Create a global output channel for the extension
+export const outputChannel = vscode.window.createOutputChannel("Workspaces List")
+
 export async function activate(context: vscode.ExtensionContext) {
-  console.log("Workspaces List extension is now active")
+  outputChannel.appendLine("Workspaces List extension is now active")
 
   // Create the decorator
   const decorator = new ClaudeCodeDecorator()
@@ -44,6 +47,8 @@ export async function activate(context: vscode.ExtensionContext) {
     focusCommand,
     decorationProvider,
     decorator,
+    workspacesProvider,
+    outputChannel,
   )
 
   // Initial refresh - wait for it to complete before continuing
@@ -51,5 +56,5 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  console.log("Workspaces List extension is now deactivated")
+  outputChannel.appendLine("Workspaces List extension is now deactivated")
 }

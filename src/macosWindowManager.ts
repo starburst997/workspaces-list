@@ -2,6 +2,7 @@ import { exec } from "child_process"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { promisify } from "util"
+import { outputChannel } from "./extension"
 
 const execAsync = promisify(exec)
 
@@ -19,7 +20,7 @@ export class MacOSWindowManager {
    * from the main Cursor process
    */
   async getOpenWindows(): Promise<WindowInfo[]> {
-    console.log("[WorkspacesList] Starting window detection...")
+    outputChannel.appendLine("[WorkspacesList] Starting window detection...")
 
     try {
       // Find main Cursor process
@@ -29,19 +30,19 @@ export class MacOSWindowManager {
       const lines = psOut.trim().split("\n")
 
       if (lines.length === 0) {
-        console.log("[WorkspacesList] Main Cursor process not found")
+        outputChannel.appendLine("[WorkspacesList] Main Cursor process not found")
         return []
       }
 
       // Extract PID
       const pidMatch = lines[0].match(/^\S+\s+(\d+)/)
       if (!pidMatch) {
-        console.log("[WorkspacesList] Could not extract PID")
+        outputChannel.appendLine("[WorkspacesList] Could not extract PID")
         return []
       }
 
       const mainPid = pidMatch[1]
-      console.log(`[WorkspacesList] Main Cursor PID: ${mainPid}`)
+      outputChannel.appendLine(`[WorkspacesList] Main Cursor PID: ${mainPid}`)
 
       // Get workspace storage files opened by main process
       const { stdout: lsofOut } = await execAsync(
@@ -57,7 +58,7 @@ export class MacOSWindowManager {
         })
         .filter((h) => h !== null) as string[]
 
-      console.log(
+      outputChannel.appendLine(
         `[WorkspacesList] Found ${storageHashes.length} workspace storage hashes`,
       )
 
@@ -76,10 +77,10 @@ export class MacOSWindowManager {
         }
       }
 
-      console.log(`[WorkspacesList] Found ${windows.length} workspaces`)
+      outputChannel.appendLine(`[WorkspacesList] Found ${windows.length} workspaces`)
       return windows
     } catch (error: unknown) {
-      console.error("[WorkspacesList] Error getting windows:", error)
+      outputChannel.appendLine(`[WorkspacesList] Error getting windows: ${error}`)
       return []
     }
   }

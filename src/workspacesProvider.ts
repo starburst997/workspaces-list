@@ -3,6 +3,7 @@ import { BrowserWindowManager } from "./browserWindowManager"
 import { ClaudeCodeDecorator } from "./claudeCodeDecorator"
 import { ClaudeCodeMonitor } from "./claudeCodeMonitor"
 import { ConfigReader, WorkspaceConfig } from "./configReader"
+import { outputChannel } from "./extension"
 import { IconRenderer } from "./iconRenderer"
 import { MacOSWindowManager, WindowInfo } from "./macosWindowManager"
 import { ClaudeCodeStatusInfo } from "./types"
@@ -101,7 +102,7 @@ export class WorkspacesProvider
   }
 
   async refresh(): Promise<void> {
-    console.log("[WorkspacesList] Refresh triggered")
+    outputChannel.appendLine("[WorkspacesList] Refresh triggered")
     await this.loadWorkspaces()
     this._onDidChangeTreeData.fire()
   }
@@ -118,17 +119,17 @@ export class WorkspacesProvider
   }
 
   private async loadWorkspaces(): Promise<void> {
-    console.log("[WorkspacesList] loadWorkspaces() called")
+    outputChannel.appendLine("[WorkspacesList] loadWorkspaces() called")
     try {
       // Get workspace windows
       const windows = await this.windowManager.getOpenWindows()
-      console.log(
+      outputChannel.appendLine(
         `[WorkspacesList] Got ${windows.length} workspace windows from manager`,
       )
 
       // Get browser windows
       const browserWindows = await this.browserWindowManager.getBrowserWindows()
-      console.log(
+      outputChannel.appendLine(
         `[WorkspacesList] Got ${browserWindows.length} browser windows`,
       )
 
@@ -138,7 +139,7 @@ export class WorkspacesProvider
           const name = this.windowManager.getWorkspaceName(windowInfo)
           const workspacePath =
             windowInfo.workspacePath || windowInfo.windowTitle
-          console.log(
+          outputChannel.appendLine(
             `[WorkspacesList] Processing window: ${name} at ${workspacePath}`,
           )
 
@@ -161,7 +162,7 @@ export class WorkspacesProvider
           const displayName = config?.displayName || name
           const label = emojiPrefix + displayName
 
-          console.log(`[WorkspacesList] Created workspace item: ${label}`)
+          outputChannel.appendLine(`[WorkspacesList] Created workspace item: ${label}`)
 
           return new WorkspaceItem(
             label,
@@ -193,7 +194,7 @@ export class WorkspacesProvider
           windowIndex: browserWindow.windowIndex,
         }
 
-        console.log(`[WorkspacesList] Created browser item: ${label}`)
+        outputChannel.appendLine(`[WorkspacesList] Created browser item: ${label}`)
 
         return new WorkspaceItem(
           label,
@@ -212,7 +213,7 @@ export class WorkspacesProvider
       // Combine workspace and browser items
       this.workspaces = [...workspaceItems, ...browserItems]
 
-      console.log(
+      outputChannel.appendLine(
         `[WorkspacesList] Total items created: ${this.workspaces.length} (${workspaceItems.length} workspaces, ${browserItems.length} browsers)`,
       )
 
@@ -227,11 +228,11 @@ export class WorkspacesProvider
           })
           this.disposables.push(...watchers)
           this.watchedWorkspaces.add(item.path)
-          console.log(`[WorkspacesList] Set up watcher for ${item.path}`)
+          outputChannel.appendLine(`[WorkspacesList] Set up watcher for ${item.path}`)
         }
       }
     } catch (error: unknown) {
-      console.error("[WorkspacesList] Failed to load workspaces:", error)
+      outputChannel.appendLine(`[WorkspacesList] Failed to load workspaces: ${error}`)
       this.workspaces = []
     }
   }
@@ -268,7 +269,7 @@ export class WorkspacesProvider
         void vscode.commands.executeCommand("list.clear")
       }, 50)
     } catch (error) {
-      console.error("[WorkspacesList] Failed to focus workspace:", error)
+      outputChannel.appendLine(`[WorkspacesList] Failed to focus workspace: ${error}`)
       vscode.window.showErrorMessage(`Failed to switch to: ${item.label}`)
     }
   }
@@ -278,7 +279,7 @@ export class WorkspacesProvider
    * Only monitors when window is focused (performance optimization)
    */
   private startMonitoring(): void {
-    console.log("[WorkspacesList] Starting Claude Code status monitoring")
+    outputChannel.appendLine("[WorkspacesList] Starting Claude Code status monitoring")
 
     // Get status monitor interval from settings
     const config = vscode.workspace.getConfiguration("workspacesList")
@@ -309,7 +310,7 @@ export class WorkspacesProvider
         await this.decorator.updateAllStatuses(workspacePaths)
 
       if (changedPaths.length > 0) {
-        console.log(
+        outputChannel.appendLine(
           `[WorkspacesList] Status changed for ${changedPaths.length} workspace(s) at ${new Date().toLocaleTimeString()}`,
         )
 
@@ -355,7 +356,7 @@ export class WorkspacesProvider
         const wasFocused = this.isWindowFocused
         this.isWindowFocused = state.focused
 
-        console.log(
+        outputChannel.appendLine(
           `[WorkspacesList] Window focus changed: ${wasFocused} -> ${state.focused}`,
         )
 

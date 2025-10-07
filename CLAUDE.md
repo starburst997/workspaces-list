@@ -26,17 +26,19 @@ A VSCode/Cursor extension that displays all currently opened workspace windows i
 - Handles monitoring intervals and focus detection
 
 #### 3. macOS Window Manager (`src/macosWindowManager.ts`)
-- Uses AppleScript to interact with macOS window system
-- Lists all open VSCode/Cursor windows
-- Extracts workspace paths from window titles
-- Switches focus to specific windows
-- Detects if current window has focus
+- Detects both VSCode and Cursor application windows
+- Reads workspace storage from both apps:
+  - Cursor: `~/Library/Application Support/Cursor/User/workspaceStorage`
+  - VSCode: `~/Library/Application Support/Code/User/workspaceStorage`
+- Uses process enumeration to find main app PIDs
+- Extracts workspace paths from storage files
+- Switches focus to specific windows via VSCode API
 
-**Key AppleScript Operations:**
-- `System Events` process enumeration for window listing
-- Window title extraction via `name of window`
-- Window focusing via `activate` and `AXRaise` action
-- Frontmost application detection for focus monitoring
+**Key Operations:**
+- Process detection via `ps aux` and `grep`
+- File handle enumeration via `lsof` to find active workspace storage
+- Workspace path extraction from `workspace.json` files
+- Window focusing via `vscode.openFolder` command
 
 #### 4. Config Reader (`src/configReader.ts`)
 - Reads `.workspaces-list.json` from workspace root

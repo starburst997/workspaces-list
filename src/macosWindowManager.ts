@@ -17,32 +17,72 @@ export interface WindowInfo {
 export class MacOSWindowManager {
   /**
    * Get all open Cursor/VSCode windows by reading workspace storage
-   * from the main Cursor process
+   * from the main processes
    */
   async getOpenWindows(): Promise<WindowInfo[]> {
     outputChannel.appendLine("[WorkspacesList] Starting window detection...")
 
+    const allWindows: WindowInfo[] = []
+
+    // Check both Cursor and VSCode
+    const apps = [
+      {
+        name: "Cursor",
+        processPath: "Cursor.app/Contents/MacOS/Cursor",
+        storagePath: "Library/Application Support/Cursor/User/workspaceStorage",
+      },
+      {
+        name: "Code",
+        processPath: "Visual Studio Code.app/Contents/MacOS/Electron",
+        storagePath:
+          "Library/Application Support/Code/User/workspaceStorage",
+      },
+    ]
+
+    for (const app of apps) {
+      try {
+        const windows = await this.getWindowsForApp(app.name, app.processPath, app.storagePath)
+        allWindows.push(...windows)
+      } catch (error: unknown) {
+        outputChannel.appendLine(
+          `[WorkspacesList] Error getting ${app.name} windows: ${error}`,
+        )
+      }
+    }
+
+    outputChannel.appendLine(`[WorkspacesList] Found ${allWindows.length} total workspaces`)
+    return allWindows
+  }
+
+  /**
+   * Get windows for a specific app
+   */
+  private async getWindowsForApp(
+    appName: string,
+    processPath: string,
+    storagePath: string,
+  ): Promise<WindowInfo[]> {
     try {
-      // Find main Cursor process
+      // Find main process
       const { stdout: psOut } = await execAsync(
-        'ps aux | grep "Cursor.app/Contents/MacOS/Cursor" | grep -v grep | grep -v Helper',
+        `ps aux | grep "${processPath}" | grep -v grep | grep -v Helper`,
       )
-      const lines = psOut.trim().split("\n")
+      const lines = psOut.trim().split("\n").filter(line => line.trim())
 
       if (lines.length === 0) {
-        outputChannel.appendLine("[WorkspacesList] Main Cursor process not found")
+        outputChannel.appendLine(`[WorkspacesList] ${appName} process not found`)
         return []
       }
 
       // Extract PID
       const pidMatch = lines[0].match(/^\S+\s+(\d+)/)
       if (!pidMatch) {
-        outputChannel.appendLine("[WorkspacesList] Could not extract PID")
+        outputChannel.appendLine(`[WorkspacesList] Could not extract ${appName} PID`)
         return []
       }
 
       const mainPid = pidMatch[1]
-      outputChannel.appendLine(`[WorkspacesList] Main Cursor PID: ${mainPid}`)
+      outputChannel.appendLine(`[WorkspacesList] ${appName} PID: ${mainPid}`)
 
       // Get workspace storage files opened by main process
       const { stdout: lsofOut } = await execAsync(
@@ -52,6 +92,7 @@ export class MacOSWindowManager {
       const storageHashes = lsofOut
         .trim()
         .split("\n")
+        .filter(line => line.trim())
         .map((line) => {
           const match = line.match(/workspaceStorage\/([a-f0-9]+)\//)
           return match ? match[1] : null
@@ -59,16 +100,19 @@ export class MacOSWindowManager {
         .filter((h) => h !== null) as string[]
 
       outputChannel.appendLine(
-        `[WorkspacesList] Found ${storageHashes.length} workspace storage hashes`,
+        `[WorkspacesList] Found ${storageHashes.length} ${appName} workspace storage hashes`,
       )
 
       // Read workspace path for each hash
       const windows: WindowInfo[] = []
       for (let i = 0; i < storageHashes.length; i++) {
-        const workspacePath = await this.getWorkspaceFromHash(storageHashes[i])
+        const workspacePath = await this.getWorkspaceFromHash(
+          storageHashes[i],
+          storagePath,
+        )
         if (workspacePath) {
           windows.push({
-            appName: "Cursor",
+            appName,
             windowTitle: path.basename(workspacePath),
             windowIndex: i + 1,
             windowId: storageHashes[i],
@@ -77,10 +121,10 @@ export class MacOSWindowManager {
         }
       }
 
-      outputChannel.appendLine(`[WorkspacesList] Found ${windows.length} workspaces`)
+      outputChannel.appendLine(`[WorkspacesList] Found ${windows.length} ${appName} workspaces`)
       return windows
     } catch (error: unknown) {
-      outputChannel.appendLine(`[WorkspacesList] Error getting windows: ${error}`)
+      outputChannel.appendLine(`[WorkspacesList] Error getting ${appName} windows: ${error}`)
       return []
     }
   }
@@ -88,11 +132,14 @@ export class MacOSWindowManager {
   /**
    * Get workspace path from storage hash
    */
-  private async getWorkspaceFromHash(hash: string): Promise<string | null> {
+  private async getWorkspaceFromHash(
+    hash: string,
+    storagePath: string,
+  ): Promise<string | null> {
     try {
       const workspaceJsonPath = path.join(
         process.env.HOME || "",
-        "Library/Application Support/Cursor/User/workspaceStorage",
+        storagePath,
         hash,
         "workspace.json",
       )

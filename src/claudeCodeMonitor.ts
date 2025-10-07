@@ -735,7 +735,7 @@ export class ClaudeCodeMonitor {
         }
 
         // Check if last message is from assistant (task completed)
-        if (msg.role === "assistant" || true) {
+        if (msg.role === "assistant") {
           // Additional check: Make sure there's no tool_use content (which indicates waiting)
           const content = JSON.stringify(msg.content).toLowerCase()
           if (content.includes("tool_use")) {
@@ -878,42 +878,64 @@ export class ClaudeCodeMonitor {
    */
   async updateLastAccessTime(workspacePath: string): Promise<void> {
     try {
-      const encodedPath = this.encodeWorkspacePath(workspacePath)
-      const projectDir = path.join(
-        ClaudeCodeMonitor.CLAUDE_PROJECTS_DIR,
-        encodedPath,
-      )
+      // Use cached conversation data if available
+      const conversations = this.conversationCache.get(workspacePath)
 
-      // Touch the most recent .jsonl file to trigger watchers
-      const files = await fs.readdir(projectDir)
-      const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"))
+      let mostRecentFile: string | null = null
 
-      if (jsonlFiles.length > 0) {
-        // Find the most recent file
-        let mostRecentFile: string | null = null
-        let mostRecentTime = 0
+      if (conversations && conversations.length > 0) {
+        // Conversations are already sorted by lastModified, so first is most recent
+        // We need to find the actual file path for this conversation
+        const encodedPath = this.encodeWorkspacePath(workspacePath)
+        const projectDir = path.join(
+          ClaudeCodeMonitor.CLAUDE_PROJECTS_DIR,
+          encodedPath,
+        )
 
-        for (const file of jsonlFiles) {
-          const filePath = path.join(projectDir, file)
-          try {
-            const stats = await fs.stat(filePath)
-            if (stats.mtimeMs > mostRecentTime) {
-              mostRecentTime = stats.mtimeMs
-              mostRecentFile = filePath
+        // Check our file cache for the most recent file
+        const cachedFiles = this.projectFilesCache.get(projectDir)
+        if (cachedFiles && cachedFiles.length > 0) {
+          // Files in cache are already sorted by mtime
+          const sorted = [...cachedFiles].sort((a, b) => b.mtime - a.mtime)
+          mostRecentFile = sorted[0]?.path || null
+        } else {
+          // Fallback: construct path from cached conversation metadata
+          // Look through conversationFileCache to find the file
+          for (const [filePath, metadata] of this.conversationFileCache.entries()) {
+            if (filePath.startsWith(projectDir)) {
+              if (!mostRecentFile || metadata.lastModified > (this.conversationFileCache.get(mostRecentFile)?.lastModified || 0)) {
+                mostRecentFile = filePath
+              }
             }
-          } catch {
-            // Skip files we can't stat
           }
         }
+      }
 
-        if (mostRecentFile) {
-          // Touch the file (update its timestamp without changing content)
-          const now = new Date()
-          await fs.utimes(mostRecentFile, now, now)
-          logEvent(
-            `✓ Updated timestamp for ${path.basename(mostRecentFile)} to trigger state transition`,
-          )
+      if (!mostRecentFile) {
+        // No cached data, fall back to checking the directory
+        const encodedPath = this.encodeWorkspacePath(workspacePath)
+        const projectDir = path.join(
+          ClaudeCodeMonitor.CLAUDE_PROJECTS_DIR,
+          encodedPath,
+        )
+
+        // Only do filesystem operations if we have no cache
+        const files = await fs.readdir(projectDir)
+        const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"))
+
+        if (jsonlFiles.length > 0) {
+          // Just use the first jsonl file we find
+          mostRecentFile = path.join(projectDir, jsonlFiles[0])
         }
+      }
+
+      if (mostRecentFile) {
+        // Touch the file (update its timestamp without changing content)
+        const now = new Date()
+        await fs.utimes(mostRecentFile, now, now)
+        logEvent(
+          `✓ Updated timestamp for ${path.basename(mostRecentFile)} to trigger state transition`,
+        )
       }
     } catch (err) {
       log(`Error updating last access time for ${workspacePath}:`, err)

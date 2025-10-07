@@ -56,12 +56,18 @@ export class ClaudeCodeMonitor {
   private conversationFileCache: Map<string, ConversationMetadata> = new Map() // Cache individual file metadata
   private workingDirectoryCache: Map<string, string> = new Map() // Static cache for workingDirectory by file path
   private projectDirExistsCache: Map<string, boolean> = new Map() // Cache for fs.access checks
-  private projectFilesCache: Map<string, string[]> = new Map() // Cache for fs.readdir results
+  private projectFilesCache: Map<
+    string,
+    Array<{ path: string; mtime: number }>
+  > = new Map() // Cache for fs.readdir results with mtime
 
   // Process monitoring cache
   private claudeProcessCache: Map<string, ClaudeProcess> = new Map() // pid -> process info
   private processMonitorInterval: NodeJS.Timeout | undefined
   private readonly PROCESS_MONITOR_INTERVAL = 30000 // 30 seconds
+
+  // File age threshold for skipping old conversations (24 hours)
+  private readonly FILE_AGE_THRESHOLD_MS = 24 * 60 * 60 * 1000 // 24 hours
 
   /**
    * Get the singleton instance
@@ -374,24 +380,44 @@ export class ClaudeCodeMonitor {
         return conversations
       }
 
-      // Get list of .jsonl files (with cache)
+      const now = Date.now()
+      const ageThreshold = now - this.FILE_AGE_THRESHOLD_MS
+
+      // Get list of recent .jsonl files (with cache)
       let jsonlFiles = this.projectFilesCache.get(projectDir)
       if (!jsonlFiles) {
+        // Read directory and get file stats in one go
         const entries = await fs.readdir(projectDir, { withFileTypes: true })
-        jsonlFiles = entries
+        const filePromises = entries
           .filter((e) => e.isFile() && e.name.endsWith(".jsonl"))
-          .map((e) => path.join(projectDir, e.name))
+          .map(async (e) => {
+            const filePath = path.join(projectDir, e.name)
+            const stats = await fs.stat(filePath)
+            return { path: filePath, mtime: stats.mtimeMs }
+          })
+
+        const allFiles = await Promise.all(filePromises)
+
+        // Filter to only include files modified in last 24 hours
+        jsonlFiles = allFiles.filter((f) => f.mtime >= ageThreshold)
+
+        // Log skipped old files
+        const skippedCount = allFiles.length - jsonlFiles.length
+        if (skippedCount > 0) {
+          log(`  ⏭️  Skipped ${skippedCount} old file(s) (>24h)`)
+        }
+
         this.projectFilesCache.set(projectDir, jsonlFiles)
       }
 
-      for (const filePath of jsonlFiles) {
+      for (const fileInfo of jsonlFiles) {
         try {
           // Check if we have this file cached
-          let metadata = this.conversationFileCache.get(filePath)
+          let metadata = this.conversationFileCache.get(fileInfo.path)
           if (!metadata) {
             // Not cached - read the file
-            metadata = await this.readConversationFile(filePath)
-            this.conversationFileCache.set(filePath, metadata)
+            metadata = await this.readConversationFile(fileInfo.path)
+            this.conversationFileCache.set(fileInfo.path, metadata)
 
             // Log when we actually read from file
             const timestamp = metadata.lastModified
@@ -401,13 +427,13 @@ export class ClaudeCodeMonitor {
               ? Math.round((Date.now() - metadata.lastModified) / 1000 / 60)
               : 0
             logEvent(
-              `  📖 Read from file: ${path.basename(filePath)} - last msg ${minutesAgo}min ago @ ${timestamp} (${metadata.lastMessage?.role || "N/A"})`,
+              `  📖 Read from file: ${path.basename(fileInfo.path)} - last msg ${minutesAgo}min ago @ ${timestamp} (${metadata.lastMessage?.role || "N/A"})`,
             )
           }
 
           conversations.push(metadata)
         } catch (err) {
-          log(`Failed to read ${path.basename(filePath)}:`, err)
+          log(`Failed to read ${path.basename(fileInfo.path)}:`, err)
         }
       }
     } catch (error: unknown) {

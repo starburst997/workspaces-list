@@ -219,14 +219,12 @@ export class WorkspacesProvider
       // Set up file watchers for new workspaces
       for (const item of workspaceItems) {
         if (item.path && !this.watchedWorkspaces.has(item.path)) {
-          const watchers = this.claudeMonitor.watchWorkspace(
-            item.path,
-            /*() => {
-              // On file change, update Claude Code status for this workspace
-              console.log(`[WorkspacesList] Claude Code file change detected for ${item.path}`)
-              this.updateClaudeCodeStatus()
-            }*/
-          )
+          const watchers = this.claudeMonitor.watchWorkspace(item.path, () => {
+            // Do not immediately update the status
+            // On file change, update Claude Code status for this workspace
+            //console.log(`[WorkspacesList] Claude Code file change detected for ${item.path}`)
+            //this.updateClaudeCodeStatus()
+          })
           this.disposables.push(...watchers)
           this.watchedWorkspaces.add(item.path)
           console.log(`[WorkspacesList] Set up watcher for ${item.path}`)

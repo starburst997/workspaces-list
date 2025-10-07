@@ -51,8 +51,11 @@ jobs:
       - name: Install ovsx
         run: npm install -g ovsx
 
-      - name: Publish to Open VSX
-        run: ovsx publish -p ${{ secrets.OVSX_PAT }} --target darwin-x64 darwin-arm64
+      - name: Publish to Open VSX (darwin-x64)
+        run: ovsx publish -p ${{ secrets.OVSX_PAT }} --target darwin-x64
+
+      - name: Publish to Open VSX (darwin-arm64)
+        run: ovsx publish -p ${{ secrets.OVSX_PAT }} --target darwin-arm64
 
       - name: Generate changelog and create release
         uses: starburst997/commits-logs@v1

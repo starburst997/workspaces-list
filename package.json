@@ -173,8 +173,8 @@
     "pretest": "npm run compile",
     "lint": "eslint src --ext ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "package": "vsce package --target darwin-x64 darwin-arm64",
-    "publish": "vsce publish --target darwin-x64 darwin-arm64"
+    "package": "vsce package --target darwin-x64 && vsce package --target darwin-arm64",
+    "publish": "vsce publish --target darwin-x64 && vsce publish --target darwin-arm64"
   },
   "devDependencies": {
     "@types/node": "^20.x",

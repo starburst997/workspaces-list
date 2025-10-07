@@ -7,7 +7,7 @@
   "author": {
     "name": "JD Boivin"
   },
-  "icon": "icon.png",
+  "icon": "docs/icon.png",
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"

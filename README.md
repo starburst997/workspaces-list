@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon.png" alt="Workspaces List Icon" width="128">
+  <img src="docs/icon.png" alt="Workspaces List Icon" width="128">
 </p>
 
 # Workspaces List

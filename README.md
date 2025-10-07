@@ -1,13 +1,11 @@
 # Workspaces List
 
-<p align="center">
-  <img src="icon.png" alt="Workspaces List Icon" width="128">
-</p>
-
 [![Visual Studio Marketplace](https://img.shields.io/badge/Visual%20Studio%20Marketplace-Install-blue?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=jdboivin.workspaces-list)
 [![Open VSX Registry](https://img.shields.io/badge/Open%20VSX%20Registry-Install-orange?style=flat-square&logo=eclipse-ide)](https://open-vsx.org/extension/jdboivin/workspaces-list)
 
-> ⚠️ **macOS Only**: This extension currently only works on macOS as it uses native macOS window detection via AppleScript.
+<p align="center">
+  <img src="icon.png" alt="Workspaces List Icon" width="128">
+</p>
 
 A VSCode/Cursor extension that lists all currently opened workspaces in a sidebar with Claude Code session status monitoring.
 
@@ -24,6 +22,8 @@ When working with multiple Cursor instances, it's easy to lose track of which wo
 - See which workspaces have Claude running, executing tasks, or waiting for input
 - Quickly switch between workspaces with a single click
 - Monitor multiple AI-assisted projects simultaneously
+
+> ⚠️ **macOS Only**: This extension currently only works on macOS as it uses native macOS window detection via AppleScript.
 
 ## Features
 

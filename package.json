@@ -56,80 +56,80 @@
         "id": "workspacesList.claudeOrange",
         "description": "Claude Code executing status color (orange)",
         "defaults": {
-          "dark": "#D97706",
-          "light": "#D97706",
-          "highContrast": "#D97706",
-          "highContrastLight": "#D97706"
+          "dark": "#FF8A6B",
+          "light": "#FF8A6B",
+          "highContrast": "#FF8A6B",
+          "highContrastLight": "#FF8A6B"
         }
       },
       {
         "id": "workspacesList.gradientGreen",
         "description": "Recently finished gradient - green (0 min)",
         "defaults": {
-          "dark": "#4EC9B0",
-          "light": "#4EC9B0",
-          "highContrast": "#4EC9B0",
-          "highContrastLight": "#4EC9B0"
+          "dark": "#89D185",
+          "light": "#89D185",
+          "highContrast": "#89D185",
+          "highContrastLight": "#89D185"
         }
       },
       {
         "id": "workspacesList.gradientCyan1",
         "description": "Recently finished gradient - cyan 1 (~5 min)",
         "defaults": {
-          "dark": "#3BADB8",
-          "light": "#3BADB8",
-          "highContrast": "#3BADB8",
-          "highContrastLight": "#3BADB8"
+          "dark": "#78CB8F",
+          "light": "#78CB8F",
+          "highContrast": "#78CB8F",
+          "highContrastLight": "#78CB8F"
         }
       },
       {
         "id": "workspacesList.gradientCyan2",
         "description": "Recently finished gradient - cyan 2 (~10 min)",
         "defaults": {
-          "dark": "#2891BF",
-          "light": "#2891BF",
-          "highContrast": "#2891BF",
-          "highContrastLight": "#2891BF"
+          "dark": "#67C59A",
+          "light": "#67C59A",
+          "highContrast": "#67C59A",
+          "highContrastLight": "#67C59A"
         }
       },
       {
         "id": "workspacesList.gradientCyan3",
         "description": "Recently finished gradient - cyan 3 (~15 min)",
         "defaults": {
-          "dark": "#1574C7",
-          "light": "#1574C7",
-          "highContrast": "#1574C7",
-          "highContrastLight": "#1574C7"
+          "dark": "#56BFA4",
+          "light": "#56BFA4",
+          "highContrast": "#56BFA4",
+          "highContrastLight": "#56BFA4"
         }
       },
       {
         "id": "workspacesList.gradientBlue1",
         "description": "Recently finished gradient - blue 1 (~20 min)",
         "defaults": {
-          "dark": "#0258CE",
-          "light": "#0258CE",
-          "highContrast": "#0258CE",
-          "highContrastLight": "#0258CE"
+          "dark": "#44BAAE",
+          "light": "#44BAAE",
+          "highContrast": "#44BAAE",
+          "highContrastLight": "#44BAAE"
         }
       },
       {
         "id": "workspacesList.gradientBlue2",
         "description": "Recently finished gradient - blue 2 (~25 min)",
         "defaults": {
-          "dark": "#013CCB",
-          "light": "#013CCB",
-          "highContrast": "#013CCB",
-          "highContrastLight": "#013CCB"
+          "dark": "#33B4B8",
+          "light": "#33B4B8",
+          "highContrast": "#33B4B8",
+          "highContrastLight": "#33B4B8"
         }
       },
       {
         "id": "workspacesList.gradientBlue3",
         "description": "Recently finished gradient - blue 3 (30 min)",
         "defaults": {
-          "dark": "#007ACC",
-          "light": "#007ACC",
-          "highContrast": "#007ACC",
-          "highContrastLight": "#007ACC"
+          "dark": "#22AEC3",
+          "light": "#22AEC3",
+          "highContrast": "#22AEC3",
+          "highContrastLight": "#22AEC3"
         }
       }
     ]

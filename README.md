@@ -7,7 +7,9 @@ A VSCode/Cursor extension that lists all currently opened workspaces in a sideba
 
 **Install from:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=jdboivin.workspaces-list) | [Open VSX Registry](https://open-vsx.org/extension/jdboivin/workspaces-list)
 
-![Screenshot](docs/screenshot.png)
+<p align="center">
+  <img src="docs/screenshot_smaller.png" alt="Screenshot">
+</p>
 
 ## Why Use This Extension
 

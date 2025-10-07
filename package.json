@@ -22,6 +22,31 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Workspaces List",
+      "properties": {
+        "workspacesList.statusMonitorInterval": {
+          "type": "number",
+          "default": 5000,
+          "description": "Interval in milliseconds for monitoring Claude Code status (default: 5000ms)"
+        },
+        "workspacesList.processMonitorInterval": {
+          "type": "number",
+          "default": 30000,
+          "description": "Interval in milliseconds for scanning Claude Code processes (default: 30000ms)"
+        },
+        "workspacesList.executingThreshold": {
+          "type": "number",
+          "default": 30000,
+          "description": "Time threshold in milliseconds for detecting executing status based on recent file activity (default: 30000ms)"
+        },
+        "workspacesList.waitingMessageAge": {
+          "type": "number",
+          "default": 10000,
+          "description": "Minimum age in milliseconds for assistant messages to be considered as waiting for input (default: 10000ms)"
+        }
+      }
+    },
     "views": {
       "explorer": [
         {

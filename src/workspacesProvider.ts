@@ -279,7 +279,12 @@ export class WorkspacesProvider
    */
   private startMonitoring(): void {
     console.log("[WorkspacesList] Starting Claude Code status monitoring")
-    // Monitor every 5 seconds
+
+    // Get status monitor interval from settings
+    const config = vscode.workspace.getConfiguration("workspacesList")
+    const statusMonitorInterval = config.get<number>("statusMonitorInterval", 5000)
+
+    // Monitor at configured interval
     this.monitoringInterval = setInterval(async () => {
       if (!this.isWindowFocused) {
         return // Skip monitoring when window is not focused
@@ -287,7 +292,7 @@ export class WorkspacesProvider
 
       await this.updateClaudeCodeStatus()
       // Tree refresh is now handled inside updateClaudeCodeStatus
-    }, 5000)
+    }, statusMonitorInterval)
 
     // Do an immediate update
     this.updateClaudeCodeStatus()

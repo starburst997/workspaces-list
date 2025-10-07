@@ -1,60 +1,63 @@
 # Workspaces List
 
-> Manage multiple VSCode/Cursor workspaces with Claude Code status monitoring
+A VSCode/Cursor extension that lists all currently opened workspaces in a sidebar with Claude Code session status monitoring.
 
-A powerful workspace management extension for macOS that displays all your open VSCode and Cursor windows in a convenient sidebar, with real-time Claude Code session monitoring.
+## Why Use This Extension
+
+When working with multiple Cursor instances, it's easy to lose track of which workspace Claude is working on. This extension provides a single view of all open workspaces and shows real-time status of Claude Code sessions, making it easy to:
+
+- See which workspaces have Claude running, executing tasks, or waiting for input
+- Quickly switch between workspaces with a single click
+- Monitor multiple AI-assisted projects simultaneously
 
 ## Features
 
-### 🪟 Multi-Window Management
+### Workspace List
 
-- **See all open workspaces** in a single sidebar view
-- **Quick switching** between VSCode and Cursor windows with a single click
-- **Automatic discovery** of all running editor instances
+Displays all open VSCode/Cursor windows in the sidebar. Click any workspace to switch focus to that window.
 
-### 🤖 Claude Code Integration
+### Claude Code Status Monitoring
 
-- **Real-time status monitoring** of Claude Code sessions
-- **Three status states**:
-  - ⚠️ **Needs Attention**: Claude is waiting for your input or permission
-  - 🔄 **Running**: Claude is actively processing a task
-  - ✓ **Idle**: Claude is ready for your next prompt
-- **Smart monitoring**: Only active when your window is focused (performance optimized)
+Automatically monitors Claude Code activity in all workspaces and displays status badges:
 
-### 🎨 Customizable Workspace Appearance
+- **WaitingForInput**: Claude needs your approval or input
+- **Executing**: Claude is actively working (recent file activity)
+- **RecentlyFinished**: Claude completed a task (shows time-based color gradient)
+- **Running**: Claude process is running but idle
+- **NotRunning**: No active Claude process
+- **NoSession**: No Claude conversation found
 
-Personalize each workspace with a `.workspaces-list.json` config file:
+Status updates occur at configurable intervals only when the extension window is focused.
+
+### Browser Window Listing
+
+Also displays open Safari and Chrome windows for quick access.
+
+### Workspace Customization (Optional)
+
+Add a `.workspaces-list.json` file in your workspace root to customize appearance:
 
 ```json
 {
-  "icon": "🚀",
-  "color": "#FF6B6B",
-  "displayName": "My Awesome Project"
+  "displayName": "My Project",
+  "icon": "folder",
+  "color": "#4ECDC4"
 }
 ```
 
-**Icon Options:**
-
-- **Emojis**: `"🚀"`, `"📦"`, `"💻"`
-- **Codicons**: `"folder"`, `"file"`, `"git-branch"`
-- **SVG Content**: `"<svg>...</svg>"`
-- **File Paths**: `"./assets/icon.png"`, `"/absolute/path/icon.svg"`
-- **URLs**: `"https://example.com/icon.png"`
+**Icon formats:**
+- Codicons: `"folder"`, `"file"`, `"git-branch"`
+- Emojis: `"🚀"`, `"📦"`
+- SVG: `"<svg>...</svg>"`
+- File paths: `"./icon.png"` or absolute paths
+- URLs: `"https://example.com/icon.png"`
 
 ## Requirements
 
-- **macOS** (uses AppleScript for window management)
-- **VSCode** 1.85.0 or later, or **Cursor** (any recent version)
-- No additional software installation required!
+- macOS (uses native window detection)
+- VSCode 1.85.0+ or Cursor
 
 ## Installation
-
-### From Marketplace
-
-1. Open VSCode/Cursor
-2. Go to Extensions (⌘+Shift+X)
-3. Search for "Workspaces List"
-4. Click Install
 
 ### From Source
 
@@ -65,160 +68,52 @@ npm install
 npm run compile
 ```
 
-Then press F5 in VSCode to launch the extension in debug mode.
+Press F5 in VSCode to run the extension.
 
 ## Usage
 
-### Basic Usage
+1. Open the "Workspaces" panel in the sidebar
+2. View all open workspaces with their Claude status
+3. Click a workspace to switch to it
+4. Use the refresh button if needed
 
-1. **Open the Workspaces panel** from the Activity Bar (left sidebar)
-2. **View all your open workspaces** - each entry shows:
-   - Workspace name
-   - Custom icon (if configured)
-   - Claude Code status (if active)
-3. **Click any workspace** to switch focus to that window
-4. **Click the refresh button** to manually update the list
+## Settings
 
-### Customizing a Workspace
+All settings are optional. The extension works with defaults out of the box.
 
-Create a `.workspaces-list.json` file in your workspace root:
+### `workspacesList.statusMonitorInterval`
 
-```json
-{
-  "icon": "🎨",
-  "color": "#4ECDC4",
-  "displayName": "Design System"
-}
-```
+- **Type:** number (milliseconds)
+- **Default:** 5000
+- **Description:** Interval for monitoring Claude Code status. Lower values provide faster updates but use more resources.
 
-The extension will automatically detect changes to this file and update the display.
+### `workspacesList.processMonitorInterval`
 
-### Monitoring Claude Code
+- **Type:** number (milliseconds)
+- **Default:** 30000
+- **Description:** Interval for scanning Claude Code processes. This detects when Claude starts or stops running.
 
-The extension automatically monitors Claude Code sessions in all your workspaces:
+### `workspacesList.executingThreshold`
 
-- **Running state**: Updates every 5 seconds while the window is focused
-- **Status icons** show in the workspace description
-- **Priority system**: "Needs Attention" takes precedence over "Running"
+- **Type:** number (milliseconds)
+- **Default:** 30000
+- **Description:** Time threshold for detecting executing status. File activity within this threshold indicates Claude is actively working.
 
-Perfect for managing multiple AI-assisted projects simultaneously!
+### `workspacesList.waitingMessageAge`
 
-## Commands
-
-| Command                            | Description                  | Shortcut   |
-| ---------------------------------- | ---------------------------- | ---------- |
-| `Workspaces List: Refresh`         | Refresh the workspace list   | -          |
-| `Workspaces List: Focus Workspace` | Switch to selected workspace | Click item |
-
-## Extension Settings
-
-This extension currently works out-of-the-box with no configuration needed. All customization is done per-workspace via `.workspaces-list.json` files.
-
-## Performance
-
-The extension is designed to be lightweight and efficient:
-
-- **Focus-aware monitoring**: Only monitors Claude Code status when the window is focused
-- **Efficient polling**: Updates every 5 seconds (status) and 2 seconds (focus detection)
-- **Smart caching**: Configuration and status information is cached
-- **Minimal AppleScript calls**: Window detection is optimized
+- **Type:** number (milliseconds)
+- **Default:** 10000
+- **Description:** Minimum age for assistant messages to be considered as waiting for input. This prevents false positives during rapid execution.
 
 ## How It Works
 
-### Window Detection
-
-Uses macOS AppleScript to enumerate all VSCode and Cursor windows via System Events, without requiring a compiled binary.
-
-### Workspace Identification
-
-Extracts workspace paths from window titles using pattern matching for common formats.
-
-### Claude Code Monitoring
-
-Monitors Claude Code's conversation cache directories for recent activity:
-
-- `~/.claude-code`
-- `~/.config/claude-code`
-- `~/Library/Application Support/claude-code`
-
-Status is determined by analyzing conversation metadata and message timestamps.
+The extension reads Cursor's workspace storage to discover open windows and monitors Claude Code's conversation cache (`~/.claude/projects/`) for activity. Status is determined by analyzing message timestamps and content.
 
 ## Known Limitations
 
-- **macOS only**: Uses AppleScript for window management (Windows/Linux support planned)
-- **Heuristic-based Claude monitoring**: Status detection uses file system monitoring and may not be 100% accurate in all scenarios
-- **Requires window titles**: Workspace detection relies on VSCode/Cursor window title format
-
-## Troubleshooting
-
-### Workspaces not showing up?
-
-- Ensure VSCode/Cursor windows are open
-- Try clicking the refresh button
-- Check that window titles include workspace names/paths
-
-### Claude Code status not updating?
-
-- Verify Claude Code cache directories exist
-- Check that conversations are associated with the correct workspace
-- Ensure the extension window is focused (monitoring pauses when unfocused)
-
-### Icon not displaying?
-
-- Verify `.workspaces-list.json` is in the workspace root
-- Check JSON syntax is valid
-- For file paths, ensure the icon file exists
-- For URLs, ensure the image is accessible
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-### Development Setup
-
-```bash
-git clone https://github.com/your-username/workspaces-list.git
-cd workspaces-list
-npm install
-npm run compile
-```
-
-Press F5 to launch the extension in debug mode.
-
-### Running Tests
-
-```bash
-npm test
-```
-
-## Roadmap
-
-- [ ] Cross-platform support (Windows, Linux)
-- [ ] Keyboard shortcuts for workspace switching
-- [ ] Workspace grouping and categorization
-- [ ] Git status integration
-- [ ] Quick actions (open terminal, etc.)
-- [ ] Configurable polling intervals
-- [ ] Workspace search/filter
+- macOS only (uses system-specific window detection)
+- Claude status detection is heuristic-based and may not be 100% accurate
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details
-
-## Credits
-
-Built with:
-
-- [VSCode Extension API](https://code.visualstudio.com/api)
-- AppleScript for macOS integration
-- TypeScript
-
----
-
-**Enjoy managing your workspaces!** If you find this extension helpful, please consider starring the repository and leaving a review.
-
-## Support
-
-- 🐛 [Report a bug](https://github.com/your-username/workspaces-list/issues)
-- 💡 [Request a feature](https://github.com/your-username/workspaces-list/issues)
-- 📖 [Read the documentation](CLAUDE.md)
+MIT

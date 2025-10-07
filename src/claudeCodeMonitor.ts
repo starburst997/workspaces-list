@@ -64,7 +64,6 @@ export class ClaudeCodeMonitor {
   // Process monitoring cache
   private claudeProcessCache: Map<string, ClaudeProcess> = new Map() // pid -> process info
   private processMonitorInterval: NodeJS.Timeout | undefined
-  private readonly PROCESS_MONITOR_INTERVAL = 30000 // 30 seconds
 
   // File age threshold for skipping old conversations (24 hours)
   private readonly FILE_AGE_THRESHOLD_MS = 24 * 60 * 60 * 1000 // 24 hours
@@ -106,12 +105,16 @@ export class ClaudeCodeMonitor {
       logEvent("✗ Failed to start process monitoring:", err)
     }
 
+    // Get process monitor interval from settings
+    const config = vscode.workspace.getConfiguration("workspacesList")
+    const processMonitorInterval = config.get<number>("processMonitorInterval", 30000)
+
     // Periodic updates
     this.processMonitorInterval = setInterval(() => {
       this.updateClaudeProcessCache().catch((err) =>
         log("Failed to update process cache:", err),
       )
-    }, this.PROCESS_MONITOR_INTERVAL)
+    }, processMonitorInterval)
   }
 
   /**
@@ -587,16 +590,23 @@ export class ClaudeCodeMonitor {
   /**
    * Check if any conversation is waiting for user input
    * This is indicated by the last message being from the assistant with a tool use or question
+   * AND the message being at least the configured age threshold old
    */
   private async checkForWaitingInput(
     conversations: ConversationMetadata[],
   ): Promise<{ isWaiting: boolean; lastMessageTime?: number }> {
     // Check recent activity (within last 5 minutes)
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000
+    const now = Date.now()
+    const fiveMinutesAgo = now - 5 * 60 * 1000
+
+    // Get waiting message age threshold from settings
+    const config = vscode.workspace.getConfiguration("workspacesList")
+    const waitingMessageAge = config.get<number>("waitingMessageAge", 10000)
 
     for (const convo of conversations) {
       if (convo.lastModified > fiveMinutesAgo && convo.lastMessage) {
         const msg = convo.lastMessage
+        const messageAge = now - convo.lastModified
 
         // Check if last message indicates waiting for input
         // This is heuristic and may need adjustment based on actual Claude Code message format
@@ -610,8 +620,13 @@ export class ClaudeCodeMonitor {
             //content.includes("user-prompt-submit-hook")
             content.includes("tool_use")
           ) {
-            log(`Detected waiting for input in conversation`)
-            return { isWaiting: true, lastMessageTime: convo.lastModified }
+            // Check if message is old enough (to avoid false positives during execution)
+            if (messageAge >= waitingMessageAge) {
+              log(`Detected waiting for input in conversation (message ${Math.round(messageAge / 1000)}s old)`)
+              return { isWaiting: true, lastMessageTime: convo.lastModified }
+            } else {
+              log(`Skipping waiting detection - message too recent (${Math.round(messageAge / 1000)}s < ${Math.round(waitingMessageAge / 1000)}s)`)
+            }
           }
         }
       }
@@ -622,16 +637,20 @@ export class ClaudeCodeMonitor {
 
   /**
    * Check if any conversation is currently executing a task
-   * This is indicated by very recent activity (within last 30 seconds)
+   * This is indicated by very recent activity (within configured threshold)
    */
   private async checkForExecuting(
     conversations: ConversationMetadata[],
   ): Promise<{ isExecuting: boolean; lastMessageTime?: number }> {
     const now = Date.now()
-    const thirtySecondsAgo = now - 30 * 1000
+
+    // Get executing threshold from settings
+    const config = vscode.workspace.getConfiguration("workspacesList")
+    const executingThreshold = config.get<number>("executingThreshold", 30000)
+    const thresholdAgo = now - executingThreshold
 
     log(
-      `Checking for executing... (now: ${now}, threshold: ${thirtySecondsAgo})`,
+      `Checking for executing... (now: ${now}, threshold: ${thresholdAgo})`,
     )
 
     for (const convo of conversations) {
@@ -640,7 +659,7 @@ export class ClaudeCodeMonitor {
         `  Conversation modified ${ageSeconds}s ago (${convo.lastModified} vs ${now})`,
       )
 
-      if (convo.lastModified > thirtySecondsAgo) {
+      if (convo.lastModified > thresholdAgo) {
         log(`✓ Detected executing conversation (modified ${ageSeconds}s ago)`)
         return { isExecuting: true, lastMessageTime: convo.lastModified }
       }

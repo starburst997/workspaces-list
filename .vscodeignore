@@ -6,3 +6,7 @@ src/**
 **/*.map
 **/*.ts
 **/tsconfig.json
+node_modules/**
+esbuild.js
+.eslintrc.json
+tsconfig.json

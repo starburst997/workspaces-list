@@ -262,6 +262,11 @@ export class WorkspacesProvider
           forceReuseWindow: false,
         })
       }
+
+      // Clear selection after click using list.clear command
+      setTimeout(() => {
+        void vscode.commands.executeCommand("list.clear")
+      }, 50)
     } catch (error) {
       console.error("[WorkspacesList] Failed to focus workspace:", error)
       vscode.window.showErrorMessage(`Failed to switch to: ${item.label}`)

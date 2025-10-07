@@ -16,6 +16,11 @@ function log(...args: unknown[]): void {
   console.log("[ClaudeCodeMonitor]", ...args)
 }
 
+// Log only important events (always shown)
+function logEvent(...args: unknown[]): void {
+  console.log("[ClaudeCodeMonitor]", ...args)
+}
+
 interface ClaudeMessage {
   role: string
   content: unknown
@@ -30,7 +35,15 @@ interface ConversationMetadata {
   lastMessage?: ClaudeMessage
 }
 
+interface ClaudeProcess {
+  pid: string
+  cwd: string
+}
+
 export class ClaudeCodeMonitor {
+  // Singleton instance
+  private static instance: ClaudeCodeMonitor | null = null
+
   // Claude Code stores projects in ~/.claude/projects
   private static readonly CLAUDE_PROJECTS_DIR = path.join(
     process.env.HOME || "",
@@ -40,8 +53,151 @@ export class ClaudeCodeMonitor {
 
   private watchers: Map<string, vscode.FileSystemWatcher> = new Map()
   private conversationCache: Map<string, ConversationMetadata[]> = new Map()
-  private cacheTimestamps: Map<string, number> = new Map() // Track when cache was last updated
-  private readonly CACHE_TTL = 10000 // Cache for 10 seconds
+  private conversationFileCache: Map<string, ConversationMetadata> = new Map() // Cache individual file metadata
+  private workingDirectoryCache: Map<string, string> = new Map() // Static cache for workingDirectory by file path
+  private projectDirExistsCache: Map<string, boolean> = new Map() // Cache for fs.access checks
+  private projectFilesCache: Map<string, string[]> = new Map() // Cache for fs.readdir results
+
+  // Process monitoring cache
+  private claudeProcessCache: Map<string, ClaudeProcess> = new Map() // pid -> process info
+  private processMonitorInterval: NodeJS.Timeout | undefined
+  private readonly PROCESS_MONITOR_INTERVAL = 30000 // 30 seconds
+
+  /**
+   * Get the singleton instance
+   */
+  static getInstance(): ClaudeCodeMonitor {
+    if (!ClaudeCodeMonitor.instance) {
+      ClaudeCodeMonitor.instance = new ClaudeCodeMonitor()
+      logEvent("✓ ClaudeCodeMonitor singleton instance created")
+    }
+    return ClaudeCodeMonitor.instance
+  }
+
+  /**
+   * Private constructor to enforce singleton pattern
+   */
+  private constructor() {
+    // Private constructor
+  }
+
+  /**
+   * Start periodic process monitoring
+   * Returns a promise that resolves when the initial scan is complete
+   */
+  async startProcessMonitoring(): Promise<void> {
+    if (this.processMonitorInterval) {
+      return // Already running
+    }
+
+    // Initial scan (await it to ensure cache is populated before returning)
+    try {
+      await this.updateClaudeProcessCache()
+      logEvent(
+        `✓ Process monitoring started (${this.claudeProcessCache.size} Claude process(es) found)`,
+      )
+    } catch (err) {
+      logEvent("✗ Failed to start process monitoring:", err)
+    }
+
+    // Periodic updates
+    this.processMonitorInterval = setInterval(() => {
+      this.updateClaudeProcessCache().catch((err) =>
+        log("Failed to update process cache:", err),
+      )
+    }, this.PROCESS_MONITOR_INTERVAL)
+  }
+
+  /**
+   * Stop periodic process monitoring
+   */
+  stopProcessMonitoring(): void {
+    if (this.processMonitorInterval) {
+      clearInterval(this.processMonitorInterval)
+      this.processMonitorInterval = undefined
+      logEvent("⏸ Process monitoring stopped (window lost focus)")
+    }
+  }
+
+  /**
+   * Update the cache of running Claude processes
+   * Only performs lsof on new processes
+   */
+  private async updateClaudeProcessCache(): Promise<void> {
+    try {
+      // Get all Claude processes (using || true to avoid error when no processes found)
+      const { stdout } = await execAsync(
+        "ps aux | grep -i claude | grep -v grep || true",
+      )
+
+      if (!stdout.trim()) {
+        log("No Claude processes found")
+        // Clear cache if no processes running
+        this.claudeProcessCache.clear()
+        return
+      }
+
+      const lines = stdout
+        .trim()
+        .split("\n")
+        .filter((line) => line.trim())
+
+      const currentPids = new Set<string>()
+
+      log(`Scanning ${lines.length} Claude process(es)`)
+
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/)
+        const pid = parts[1]
+
+        if (!pid) {
+          continue
+        }
+
+        currentPids.add(pid)
+
+        // Skip if we already have this process cached
+        if (this.claudeProcessCache.has(pid)) {
+          continue
+        }
+
+        // New process - get its working directory
+        try {
+          const { stdout: cwdOutput } = await execAsync(
+            `lsof -a -p ${pid} -d cwd 2>/dev/null | tail -1`,
+          )
+          const cwdParts = cwdOutput.trim().split(/\s+/)
+          const cwd = cwdParts[cwdParts.length - 1]
+
+          const normalizedCwd = path.normalize(cwd)
+
+          this.claudeProcessCache.set(pid, { pid, cwd: normalizedCwd })
+          log(`  ✓ Cached new process ${pid}: ${normalizedCwd}`)
+        } catch (err) {
+          log(`  ✗ Failed to get cwd for process ${pid}`)
+        }
+      }
+
+      // Remove processes that are no longer running
+      const stoppedPids: string[] = []
+      for (const pid of this.claudeProcessCache.keys()) {
+        if (!currentPids.has(pid)) {
+          stoppedPids.push(pid)
+        }
+      }
+
+      for (const pid of stoppedPids) {
+        this.claudeProcessCache.delete(pid)
+        log(`  ✗ Removed stopped process ${pid}`)
+      }
+
+      log(
+        `Process cache updated: ${this.claudeProcessCache.size} active process(es)`,
+      )
+    } catch (err) {
+      log("Error updating process cache:", err)
+    }
+  }
 
   /**
    * Encode workspace path to match Claude's directory naming
@@ -53,58 +209,23 @@ export class ClaudeCodeMonitor {
 
   /**
    * Check if Claude Code process is running for a workspace
+   * Uses cached process data for efficiency
    */
-  private async isClaudeProcessRunning(
-    workspacePath: string,
-  ): Promise<boolean> {
-    try {
-      // Get all Claude processes
-      const { stdout } = await execAsync(
-        "ps aux | grep -i claude | grep -v grep",
-      )
-      const lines = stdout.trim().split("\n")
+  private isClaudeProcessRunning(workspacePath: string): boolean {
+    const normalizedWorkspace = path.normalize(workspacePath)
 
-      log(`Found ${lines.length} Claude process(es)`)
-
-      for (const line of lines) {
-        const parts = line.trim().split(/\s+/)
-        const pid = parts[1]
-
-        if (pid) {
-          try {
-            // Get working directory for this process
-            const { stdout: cwdOutput } = await execAsync(
-              `lsof -a -p ${pid} -d cwd 2>/dev/null | tail -1`,
-            )
-            const cwdParts = cwdOutput.trim().split(/\s+/)
-            const cwd = cwdParts[cwdParts.length - 1]
-
-            log(`  Process ${pid} cwd: ${cwd}`)
-
-            // Normalize and compare paths
-            const normalizedCwd = path.normalize(cwd)
-            const normalizedWorkspace = path.normalize(workspacePath)
-
-            if (
-              normalizedCwd === normalizedWorkspace ||
-              normalizedCwd.startsWith(normalizedWorkspace + path.sep)
-            ) {
-              log(`✓ Found running Claude process for ${workspacePath}`)
-              return true
-            }
-          } catch (err) {
-            // Process might have ended or no permission
-            log(`  Failed to get cwd for process ${pid}`)
-          }
-        }
+    for (const process of this.claudeProcessCache.values()) {
+      if (
+        process.cwd === normalizedWorkspace ||
+        process.cwd.startsWith(normalizedWorkspace + path.sep)
+      ) {
+        log(`✓ Found running Claude process for ${workspacePath}`)
+        return true
       }
-
-      log(`✗ No running Claude process for ${workspacePath}`)
-      return false
-    } catch (err) {
-      log(`Error checking Claude processes:`, err)
-      return false
     }
+
+    log(`No running Claude process for ${workspacePath}`)
+    return false
   }
 
   /**
@@ -113,11 +234,20 @@ export class ClaudeCodeMonitor {
   async getStatus(
     workspacePath: string,
   ): Promise<ClaudeCodeStatusInfo | undefined> {
+    // Testing performance
+    /*return {
+      status: Object.values(ClaudeCodeStatus)[
+        Math.floor(Math.random() * Object.values(ClaudeCodeStatus).length)
+      ] as ClaudeCodeStatus,
+      lastMessageTime: Date.now(),
+      conversationCount: Math.floor(Math.random() * 10) + 1,
+    }*/
+
     try {
       log(`Getting status for workspace: ${workspacePath}`)
 
-      // First check if Claude process is actually running
-      const isProcessRunning = await this.isClaudeProcessRunning(workspacePath)
+      // First check if Claude process is actually running (using cache)
+      const isProcessRunning = this.isClaudeProcessRunning(workspacePath)
 
       const conversations = await this.getWorkspaceConversations(workspacePath)
 
@@ -134,7 +264,10 @@ export class ClaudeCodeMonitor {
       // Check for any conversation waiting for input (highest priority)
       const waitingInfo = await this.checkForWaitingInput(conversations)
       if (waitingInfo.isWaiting) {
-        log(`Status: WaitingForInput for ${workspacePath}`)
+        const timestamp = waitingInfo.lastMessageTime
+          ? new Date(waitingInfo.lastMessageTime).toLocaleTimeString()
+          : "unknown"
+        logEvent(`→ Status: WaitingForInput @ ${timestamp}`)
         return {
           status: ClaudeCodeStatus.WaitingForInput,
           lastMessageTime: waitingInfo.lastMessageTime,
@@ -145,7 +278,10 @@ export class ClaudeCodeMonitor {
       // Check for active execution (recent file activity = Claude is working)
       const executingInfo = await this.checkForExecuting(conversations)
       if (executingInfo.isExecuting) {
-        log(`Status: Executing (active file writes) for ${workspacePath}`)
+        const timestamp = executingInfo.lastMessageTime
+          ? new Date(executingInfo.lastMessageTime).toLocaleTimeString()
+          : "unknown"
+        logEvent(`→ Status: Executing @ ${timestamp}`)
         return {
           status: ClaudeCodeStatus.Executing,
           lastMessageTime: executingInfo.lastMessageTime,
@@ -158,8 +294,16 @@ export class ClaudeCodeMonitor {
       const recentlyFinishedInfo =
         await this.checkForRecentlyFinished(conversations)
       if (recentlyFinishedInfo.isRecentlyFinished) {
-        log(
-          `Status: RecentlyFinished for ${workspacePath} (${Math.round((Date.now() - (recentlyFinishedInfo.lastMessageTime || 0)) / 1000 / 60)}min ago)`,
+        const timestamp = recentlyFinishedInfo.lastMessageTime
+          ? new Date(recentlyFinishedInfo.lastMessageTime).toLocaleTimeString()
+          : "unknown"
+        const minutesAgo = recentlyFinishedInfo.lastMessageTime
+          ? Math.round(
+              (Date.now() - recentlyFinishedInfo.lastMessageTime) / 1000 / 60,
+            )
+          : 0
+        logEvent(
+          `→ Status: RecentlyFinished @ ${timestamp} (${minutesAgo}min ago)`,
         )
         return {
           status: ClaudeCodeStatus.RecentlyFinished,
@@ -190,20 +334,15 @@ export class ClaudeCodeMonitor {
 
   /**
    * Find all conversations for a workspace
+   * Uses smart caching with file watchers for invalidation
    */
   private async getWorkspaceConversations(
     workspacePath: string,
   ): Promise<ConversationMetadata[]> {
-    const cacheKey = workspacePath
-    const now = Date.now()
-
-    // Check if cache is still valid
-    const cacheTime = this.cacheTimestamps.get(cacheKey)
-    if (cacheTime && now - cacheTime < this.CACHE_TTL) {
-      const cached = this.conversationCache.get(cacheKey) || []
-      log(
-        `Using cached conversations (${cached.length}) for ${workspacePath}, age: ${now - cacheTime}ms`,
-      )
+    // Check if we have cached workspace conversations
+    const cached = this.conversationCache.get(workspacePath)
+    if (cached) {
+      log(`Cache hit: ${cached.length} conversations for ${workspacePath}`)
       return cached
     }
 
@@ -217,58 +356,73 @@ export class ClaudeCodeMonitor {
         encodedPath,
       )
 
-      log(`Looking for conversations in: ${projectDir}`)
-
-      // Check if project directory exists
-      await fs.access(projectDir)
-      log(`✓ Project directory exists`)
-
-      // Read all .jsonl files
-      const entries = await fs.readdir(projectDir, { withFileTypes: true })
-      const jsonlFiles = entries.filter(
-        (e) => e.isFile() && e.name.endsWith(".jsonl"),
-      )
-
-      log(`Found ${jsonlFiles.length} conversation files`)
-
-      for (const file of jsonlFiles) {
+      // Check if project directory exists (with cache)
+      let dirExists = this.projectDirExistsCache.get(projectDir)
+      if (dirExists === undefined) {
         try {
-          const filePath = path.join(projectDir, file.name)
-          const metadata = await this.readConversationFile(filePath)
+          await fs.access(projectDir)
+          dirExists = true
+          this.projectDirExistsCache.set(projectDir, true)
+        } catch {
+          dirExists = false
+          this.projectDirExistsCache.set(projectDir, false)
+        }
+      }
+
+      if (!dirExists) {
+        this.conversationCache.set(workspacePath, conversations)
+        return conversations
+      }
+
+      // Get list of .jsonl files (with cache)
+      let jsonlFiles = this.projectFilesCache.get(projectDir)
+      if (!jsonlFiles) {
+        const entries = await fs.readdir(projectDir, { withFileTypes: true })
+        jsonlFiles = entries
+          .filter((e) => e.isFile() && e.name.endsWith(".jsonl"))
+          .map((e) => path.join(projectDir, e.name))
+        this.projectFilesCache.set(projectDir, jsonlFiles)
+      }
+
+      for (const filePath of jsonlFiles) {
+        try {
+          // Check if we have this file cached
+          let metadata = this.conversationFileCache.get(filePath)
+          if (!metadata) {
+            // Not cached - read the file
+            metadata = await this.readConversationFile(filePath)
+            this.conversationFileCache.set(filePath, metadata)
+
+            // Log when we actually read from file
+            const timestamp = metadata.lastModified
+              ? new Date(metadata.lastModified).toLocaleTimeString()
+              : "unknown"
+            const minutesAgo = metadata.lastModified
+              ? Math.round((Date.now() - metadata.lastModified) / 1000 / 60)
+              : 0
+            logEvent(
+              `  📖 Read from file: ${path.basename(filePath)} - last msg ${minutesAgo}min ago @ ${timestamp} (${metadata.lastMessage?.role || "N/A"})`,
+            )
+          }
+
           conversations.push(metadata)
-
-          const ageSeconds = Math.round(
-            (Date.now() - metadata.lastModified) / 1000,
-          )
-          const ageMinutes = Math.round(ageSeconds / 60)
-
-          log(
-            `✓ Loaded conversation: ${file.name} (${metadata.messageCount} messages, ${ageSeconds}s/${ageMinutes}min old, last: ${metadata.lastMessage?.role || "N/A"})`,
-          )
         } catch (err) {
-          log(`✗ Failed to read conversation ${file.name}:`, err)
+          log(`Failed to read ${path.basename(filePath)}:`, err)
         }
       }
     } catch (error: unknown) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        log(`Project directory does not exist for ${workspacePath}`)
-      } else {
-        log(`Error accessing project directory:`, error)
-      }
+      log(`Error accessing project directory:`, error)
     }
 
-    log(
-      `Total conversations found for ${workspacePath}: ${conversations.length}`,
-    )
-    // Update cache with timestamp
-    this.conversationCache.set(cacheKey, conversations)
-    this.cacheTimestamps.set(cacheKey, Date.now())
+    // Cache the result (will be invalidated by file watchers)
+    this.conversationCache.set(workspacePath, conversations)
     return conversations
   }
 
   /**
    * Read a conversation .jsonl file and extract metadata
    * Optimized to only read the last portion of the file for performance
+   * Uses static caching for workingDirectory (never changes for a file)
    */
   private async readConversationFile(
     filePath: string,
@@ -276,46 +430,66 @@ export class ClaudeCodeMonitor {
     const stats = await fs.stat(filePath)
     const fileSize = stats.size
 
-    // Read first 1KB for workspace directory
-    const firstChunkSize = Math.min(1024, fileSize)
-    const handle = await fs.open(filePath, "r")
-    const firstBuffer = Buffer.alloc(firstChunkSize)
-    await handle.read(firstBuffer, 0, firstChunkSize, 0)
+    // Check if workingDirectory is cached (static, never changes)
+    let workingDirectory = this.workingDirectoryCache.get(filePath)
 
-    let workingDirectory = ""
-    const firstChunk = firstBuffer.toString("utf-8")
-    const firstLines = firstChunk.split("\n")
+    if (!workingDirectory) {
+      // Read first 1KB for workspace directory (only first time)
+      const firstChunkSize = Math.min(1024, fileSize)
+      const handle = await fs.open(filePath, "r")
+      const firstBuffer = Buffer.alloc(firstChunkSize)
+      await handle.read(firstBuffer, 0, firstChunkSize, 0)
+      await handle.close()
 
-    // Extract cwd from first few lines
-    for (const line of firstLines.slice(0, 5)) {
-      try {
-        const entry = JSON.parse(line)
-        if (entry.cwd) {
-          workingDirectory = entry.cwd
-          break
+      const firstChunk = firstBuffer.toString("utf-8")
+      const firstLines = firstChunk.split("\n")
+
+      // Extract cwd from first few lines
+      for (const line of firstLines.slice(0, 5)) {
+        try {
+          const entry = JSON.parse(line)
+          if (entry.cwd) {
+            workingDirectory = entry.cwd as string
+            break
+          }
+        } catch {
+          continue
         }
-      } catch {
-        continue
       }
+
+      if (!workingDirectory) {
+        workingDirectory = ""
+      }
+
+      // Cache permanently (working directory never changes)
+      this.workingDirectoryCache.set(filePath, workingDirectory)
     }
 
     // Read last 2KB for last message and timestamp (much more efficient)
     const lastChunkSize = Math.min(2048, fileSize)
+    const handle = await fs.open(filePath, "r")
     const lastBuffer = Buffer.alloc(lastChunkSize)
     const readPosition = Math.max(0, fileSize - lastChunkSize)
     await handle.read(lastBuffer, 0, lastChunkSize, readPosition)
     await handle.close()
 
     const lastChunk = lastBuffer.toString("utf-8")
-    const lastLines = lastChunk
+    const allLines = lastChunk
       .split("\n")
       .filter((line) => line.trim().length > 0)
-      .reverse() // Start from the end
+
+    // Skip the first line as it might be incomplete (we read from middle of file)
+    const lastLines =
+      readPosition > 0 ? allLines.slice(1).reverse() : allLines.reverse()
 
     let lastMessage: ClaudeMessage | undefined
     let lastMessageTimestamp = 0
+    let foundFirstMessage = false
+
+    log(`Parsing ${lastLines.length} lines from ${path.basename(filePath)}`)
 
     // Parse last few lines to find the most recent message
+    // Optimize: Assuming messages are ordered, exit early when we find older messages
     for (const line of lastLines.slice(0, 20)) {
       try {
         const entry = JSON.parse(line)
@@ -335,8 +509,27 @@ export class ClaudeCodeMonitor {
               ? new Date(entry.timestamp).getTime()
               : entry.timestamp
 
-          // Only update if this message is newer
-          if (timestamp > lastMessageTimestamp) {
+          if (!foundFirstMessage) {
+            // First valid message we find (from end of file)
+            lastMessageTimestamp = timestamp
+            lastMessage = {
+              role: entry.message.role || entry.type,
+              content: entry.message.content,
+              cwd: entry.cwd,
+            }
+            foundFirstMessage = true
+            log(
+              `  Found message @ ${new Date(timestamp).toLocaleTimeString()} (${entry.message.role})`,
+            )
+          } else if (timestamp < lastMessageTimestamp) {
+            // Found older message, messages are ordered - can exit early
+            log(`  Found older message - stopping scan`)
+            break
+          } else if (timestamp > lastMessageTimestamp) {
+            // Found newer message (shouldn't happen if ordered, but handle it)
+            log(
+              `  Found NEWER message @ ${new Date(timestamp).toLocaleTimeString()} (${entry.message.role})`,
+            )
             lastMessageTimestamp = timestamp
             lastMessage = {
               role: entry.message.role || entry.type,
@@ -363,34 +556,6 @@ export class ClaudeCodeMonitor {
       messageCount: approximateMessageCount,
       lastMessage,
     }
-  }
-
-  /**
-   * Check if a conversation matches a workspace
-   */
-  private matchesWorkspace(
-    conversationWorkspace: string,
-    targetWorkspace: string,
-  ): boolean {
-    if (!conversationWorkspace) {
-      return false
-    }
-
-    // Expand ~ in paths
-    const expandPath = (p: string) =>
-      p.startsWith("~") ? path.join(process.env.HOME || "", p.slice(1)) : p
-
-    const convPath = expandPath(conversationWorkspace)
-    const targetPath = expandPath(targetWorkspace)
-
-    // Normalize paths
-    const normalizedConv = path.normalize(convPath)
-    const normalizedTarget = path.normalize(targetPath)
-
-    return (
-      normalizedConv === normalizedTarget ||
-      normalizedConv.startsWith(normalizedTarget + path.sep)
-    )
   }
 
   /**
@@ -519,6 +684,7 @@ export class ClaudeCodeMonitor {
 
   /**
    * Watch a workspace for Claude Code activity
+   * Implements smart caching with file-level invalidation
    */
   watchWorkspace(
     workspacePath: string,
@@ -536,18 +702,43 @@ export class ClaudeCodeMonitor {
       const pattern = new vscode.RelativePattern(projectDir, "*.jsonl")
       const watcher = vscode.workspace.createFileSystemWatcher(pattern)
 
-      watcher.onDidChange(() => {
-        this.clearWorkspaceCache(workspacePath)
+      watcher.onDidChange((uri) => {
+        const fileName = path.basename(uri.fsPath)
+        logEvent(
+          `📝 Conversation updated: ${fileName} in ${path.basename(workspacePath)}`,
+        )
+
+        // /Users/jdboivin/.claude/projects/-Users-jdboivin-Projects-s3-mirror-sample-app/966ca583-91b8-4fb6-b800-246aaabf1e2c.jsonl
+        // /Users/jdboivin/.claude/projects/-Users-jdboivin-Projects-workspaces-list/648ea6fb-7295-4d3d-b541-f0abac560fa7.jsonl
+
+        // Invalidate only this specific file's cache
+        const a = this.conversationFileCache.delete(`${uri.fsPath}`)
+        // Clear workspace conversation list cache
+        this.conversationCache.delete(workspacePath)
+
         onChange()
       })
 
-      watcher.onDidCreate(() => {
-        this.clearWorkspaceCache(workspacePath)
+      watcher.onDidCreate((uri) => {
+        const fileName = path.basename(uri.fsPath)
+        logEvent(
+          `✨ New conversation: ${fileName} in ${path.basename(workspacePath)}`,
+        )
+        // New file - invalidate file list cache and workspace cache
+        this.projectFilesCache.delete(projectDir)
+        this.conversationCache.delete(workspacePath)
         onChange()
       })
 
-      watcher.onDidDelete(() => {
-        this.clearWorkspaceCache(workspacePath)
+      watcher.onDidDelete((uri) => {
+        const fileName = path.basename(uri.fsPath)
+        logEvent(
+          `🗑️  Conversation deleted: ${fileName} in ${path.basename(workspacePath)}`,
+        )
+        // Remove from all caches
+        this.conversationFileCache.delete(uri.fsPath)
+        this.projectFilesCache.delete(projectDir)
+        this.conversationCache.delete(workspacePath)
         onChange()
       })
 
@@ -565,7 +756,10 @@ export class ClaudeCodeMonitor {
    */
   clearCache(): void {
     this.conversationCache.clear()
-    this.cacheTimestamps.clear()
+    this.conversationFileCache.clear()
+    this.projectDirExistsCache.clear()
+    this.projectFilesCache.clear()
+    // Note: workingDirectoryCache is static and never cleared
   }
 
   /**
@@ -573,13 +767,14 @@ export class ClaudeCodeMonitor {
    */
   clearWorkspaceCache(workspacePath: string): void {
     this.conversationCache.delete(workspacePath)
-    this.cacheTimestamps.delete(workspacePath)
+    // Note: Individual file caches are cleared by file watchers
   }
 
   /**
-   * Dispose all watchers
+   * Dispose all watchers and stop monitoring
    */
   dispose(): void {
+    this.stopProcessMonitoring()
     for (const watcher of this.watchers.values()) {
       watcher.dispose()
     }

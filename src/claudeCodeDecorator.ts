@@ -24,7 +24,8 @@ export class ClaudeCodeDecorator implements vscode.FileDecorationProvider {
   private uriCache = new Map<string, vscode.Uri[]>() // Track all URIs for each workspace path
 
   constructor() {
-    this.claudeMonitor = new ClaudeCodeMonitor()
+    this.claudeMonitor = ClaudeCodeMonitor.getInstance()
+    // Note: Process monitoring is started/stopped by workspacesProvider based on focus
   }
 
   provideFileDecoration(

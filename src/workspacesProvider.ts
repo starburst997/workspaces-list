@@ -80,6 +80,7 @@ export class WorkspacesProvider
   private monitoringInterval: NodeJS.Timeout | undefined
   private isWindowFocused: boolean = true
   private disposables: vscode.Disposable[] = []
+  private watchedWorkspaces: Set<string> = new Set() // Track which workspaces have watchers
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -89,7 +90,7 @@ export class WorkspacesProvider
     this.browserWindowManager = new BrowserWindowManager()
     this.configReader = new ConfigReader()
     this.iconRenderer = new IconRenderer()
-    this.claudeMonitor = new ClaudeCodeMonitor()
+    this.claudeMonitor = ClaudeCodeMonitor.getInstance()
     this.decorator = decorator
 
     // Don't load workspaces here - let extension.ts trigger initial refresh
@@ -208,6 +209,23 @@ export class WorkspacesProvider
       console.log(
         `[WorkspacesList] Total items created: ${this.workspaces.length} (${workspaceItems.length} workspaces, ${browserItems.length} browsers)`,
       )
+
+      // Set up file watchers for new workspaces
+      for (const item of workspaceItems) {
+        if (item.path && !this.watchedWorkspaces.has(item.path)) {
+          const watchers = this.claudeMonitor.watchWorkspace(
+            item.path,
+            () => {
+              // On file change, update Claude Code status for this workspace
+              console.log(`[WorkspacesList] Claude Code file change detected for ${item.path}`)
+              this.updateClaudeCodeStatus()
+            }
+          )
+          this.disposables.push(...watchers)
+          this.watchedWorkspaces.add(item.path)
+          console.log(`[WorkspacesList] Set up watcher for ${item.path}`)
+        }
+      }
     } catch (error: unknown) {
       console.error("[WorkspacesList] Failed to load workspaces:", error)
       this.workspaces = []
@@ -307,15 +325,29 @@ export class WorkspacesProvider
     // Use VSCode's native window state API - no AppleScript needed!
     this.isWindowFocused = vscode.window.state.focused
 
+    // Start process monitoring if we have focus (await to ensure cache is populated)
+    if (this.isWindowFocused) {
+      this.claudeMonitor.startProcessMonitoring().then(() => {
+        // After initial scan, trigger an update
+        this.updateClaudeCodeStatus()
+      })
+    }
+
     const stateChangeDisposable = vscode.window.onDidChangeWindowState((state) => {
       const wasFocused = this.isWindowFocused
       this.isWindowFocused = state.focused
 
       console.log(`[WorkspacesList] Window focus changed: ${wasFocused} -> ${state.focused}`)
 
-      // If window just gained focus, immediately update
+      // Control process monitoring based on focus
       if (state.focused && !wasFocused) {
-        this.updateClaudeCodeStatus()
+        // Window gained focus - start process monitoring and immediately update
+        this.claudeMonitor.startProcessMonitoring().then(() => {
+          this.updateClaudeCodeStatus()
+        })
+      } else if (!state.focused && wasFocused) {
+        // Window lost focus - stop process monitoring
+        this.claudeMonitor.stopProcessMonitoring()
       }
     })
 

@@ -2,6 +2,8 @@
 
 A VSCode/Cursor extension that lists all currently opened workspaces in a sidebar with Claude Code session status monitoring.
 
+![Screenshot](docs/screenshot.png)
+
 ## Why Use This Extension
 
 When working with multiple Cursor instances, it's easy to lose track of which workspace Claude is working on. This extension provides a single view of all open workspaces and shows real-time status of Claude Code sessions, making it easy to:

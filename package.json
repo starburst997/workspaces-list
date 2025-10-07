@@ -3,7 +3,10 @@
   "displayName": "Workspaces List",
   "description": "Manage multiple VSCode/Cursor workspaces with Claude Code status monitoring",
   "version": "0.0.1",
-  "publisher": "your-publisher-name",
+  "publisher": "jdboivin",
+  "author": {
+    "name": "JD Boivin"
+  },
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
@@ -184,8 +187,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/workspaces-list"
+    "url": "https://github.com/starburst997/workspaces-list"
   },
+  "bugs": {
+    "url": "https://github.com/starburst997/workspaces-list/issues"
+  },
+  "homepage": "https://github.com/starburst997/workspaces-list#readme",
   "os": [
     "darwin"
   ]

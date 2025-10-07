@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version and Tag
+        id: version
+        uses: starburst997/auto-version@v1
+        with:
+          update-major-minor: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Update package version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+
+      - name: Lint code
+        run: npm run lint
+
+      - name: Compile TypeScript
+        run: npm run compile
+
+      - name: Package extension
+        run: npm run package
+
+      - name: Publish to VSCode Marketplace
+        run: npm run publish
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Install ovsx
+        run: npm install -g ovsx
+
+      - name: Publish to Open VSX
+        run: ovsx publish -p ${{ secrets.OVSX_PAT }}
+
+      - name: Generate changelog and create release
+        uses: starburst997/commits-logs@v1
+        with:
+          format: grouped
+          create-release: true
+          artifacts: |
+            *.vsix

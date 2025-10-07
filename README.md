@@ -1,6 +1,11 @@
 # Workspaces List
 
+[![Visual Studio Marketplace](https://img.shields.io/badge/Visual%20Studio%20Marketplace-Install-blue?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=jdboivin.workspaces-list)
+[![Open VSX Registry](https://img.shields.io/badge/Open%20VSX%20Registry-Install-orange?style=flat-square&logo=eclipse-ide)](https://open-vsx.org/extension/jdboivin/workspaces-list)
+
 A VSCode/Cursor extension that lists all currently opened workspaces in a sidebar with Claude Code session status monitoring.
+
+**Install from:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=jdboivin.workspaces-list) | [Open VSX Registry](https://open-vsx.org/extension/jdboivin/workspaces-list)
 
 ![Screenshot](docs/screenshot.png)
 
@@ -61,10 +66,24 @@ Add a `.workspaces-list.json` file in your workspace root to customize appearanc
 
 ## Installation
 
+### From VS Code Marketplace
+
+1. Open VS Code or Cursor
+2. Go to Extensions (Ctrl+Shift+X)
+3. Search for "Workspaces List"
+4. Click Install
+
+### Manual Installation
+
+1. Download the latest `.vsix` file from [Releases](https://github.com/starburst997/workspaces-list/releases)
+2. Open VS Code or Cursor
+3. Run `Extensions: Install from VSIX...` from the Command Palette (Ctrl+Shift+P)
+4. Select the downloaded `.vsix` file
+
 ### From Source
 
 ```bash
-git clone https://github.com/your-username/workspaces-list.git
+git clone https://github.com/starburst997/workspaces-list.git
 cd workspaces-list
 npm install
 npm run compile

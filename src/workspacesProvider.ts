@@ -6,7 +6,7 @@ import { ConfigReader, WorkspaceConfig } from "./configReader"
 import { outputChannel } from "./extension"
 import { IconRenderer } from "./iconRenderer"
 import { MacOSWindowManager, WindowInfo } from "./macosWindowManager"
-import { ClaudeCodeStatusInfo } from "./types"
+import { ClaudeCodeStatus, ClaudeCodeStatusInfo } from "./types"
 
 export class WorkspaceItem extends vscode.TreeItem {
   constructor(
@@ -258,7 +258,10 @@ export class WorkspacesProvider
 
         // Update the last modified timestamp in ClaudeCodeMonitor to trigger state transition
         // This will make other windows detect the change and transition from "Recently Finished" to "Running"
-        await this.claudeMonitor.updateLastAccessTime(item.path)
+        // Only do this if the workspace is in RecentlyFinished state
+        if (item.claudeStatus?.status === ClaudeCodeStatus.RecentlyFinished) {
+          await this.claudeMonitor.updateLastAccessTime(item.path)
+        }
 
         // Use VSCode's built-in command to switch to the workspace
         // This opens the folder in a new window or switches to existing window

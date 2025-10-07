@@ -256,6 +256,10 @@ export class WorkspacesProvider
         // Mark as acknowledged so RecentlyFinished status changes to Running
         this.decorator.markAsAcknowledged(item.path)
 
+        // Update the last modified timestamp in ClaudeCodeMonitor to trigger state transition
+        // This will make other windows detect the change and transition from "Recently Finished" to "Running"
+        await this.claudeMonitor.updateLastAccessTime(item.path)
+
         // Use VSCode's built-in command to switch to the workspace
         // This opens the folder in a new window or switches to existing window
         const uri = vscode.Uri.file(item.path)

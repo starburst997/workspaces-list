@@ -62,6 +62,12 @@ export class ClaudeCodeMonitor {
     Array<{ path: string; mtime: number }>
   > = new Map() // Cache for fs.readdir results with mtime
 
+  // Track file sizes to detect when only timestamp changes (file watch -> state transition)
+  private fileSizeCache: Map<string, number> = new Map()
+
+  // Track per-workspace startup times to prevent false "Recently Finished" states
+  private workspaceStartupTimes: Map<string, number> = new Map()
+
   // Process monitoring cache
   private claudeProcessCache: Map<string, ClaudeProcess> = new Map() // pid -> process info
   private processMonitorInterval: NodeJS.Timeout | undefined
@@ -108,7 +114,10 @@ export class ClaudeCodeMonitor {
 
     // Get process monitor interval from settings
     const config = vscode.workspace.getConfiguration("workspacesList")
-    const processMonitorInterval = config.get<number>("processMonitorInterval", 30000)
+    const processMonitorInterval = config.get<number>(
+      "processMonitorInterval",
+      30000,
+    )
 
     // Periodic updates
     this.processMonitorInterval = setInterval(() => {
@@ -256,6 +265,12 @@ export class ClaudeCodeMonitor {
     try {
       log(`Getting status for workspace: ${workspacePath}`)
 
+      // Initialize startup time for this workspace if not already set
+      if (!this.workspaceStartupTimes.has(workspacePath)) {
+        this.workspaceStartupTimes.set(workspacePath, Date.now())
+        log(`Initialized startup time for workspace: ${workspacePath}`)
+      }
+
       // First check if Claude process is actually running (using cache)
       const isProcessRunning = this.isClaudeProcessRunning(workspacePath)
 
@@ -270,6 +285,9 @@ export class ClaudeCodeMonitor {
           conversationCount: 0,
         }
       }
+
+      // Sort conversations by last modified time to ensure we use the most recent
+      conversations.sort((a, b) => b.lastModified - a.lastModified)
 
       // Check for any conversation waiting for input (highest priority)
       const waitingInfo = await this.checkForWaitingInput(conversations)
@@ -301,8 +319,10 @@ export class ClaudeCodeMonitor {
 
       // Check for recently finished (last message from assistant, < 30 min)
       // This means Claude finished but user hasn't started a new task yet
-      const recentlyFinishedInfo =
-        await this.checkForRecentlyFinished(conversations)
+      const recentlyFinishedInfo = await this.checkForRecentlyFinished(
+        conversations,
+        workspacePath,
+      )
       if (recentlyFinishedInfo.isRecentlyFinished) {
         const timestamp = recentlyFinishedInfo.lastMessageTime
           ? new Date(recentlyFinishedInfo.lastMessageTime).toLocaleTimeString()
@@ -623,10 +643,14 @@ export class ClaudeCodeMonitor {
           ) {
             // Check if message is old enough (to avoid false positives during execution)
             if (messageAge >= waitingMessageAge) {
-              log(`Detected waiting for input in conversation (message ${Math.round(messageAge / 1000)}s old)`)
+              log(
+                `Detected waiting for input in conversation (message ${Math.round(messageAge / 1000)}s old)`,
+              )
               return { isWaiting: true, lastMessageTime: convo.lastModified }
             } else {
-              log(`Skipping waiting detection - message too recent (${Math.round(messageAge / 1000)}s < ${Math.round(waitingMessageAge / 1000)}s)`)
+              log(
+                `Skipping waiting detection - message too recent (${Math.round(messageAge / 1000)}s < ${Math.round(waitingMessageAge / 1000)}s)`,
+              )
             }
           }
         }
@@ -650,9 +674,7 @@ export class ClaudeCodeMonitor {
     const executingThreshold = config.get<number>("executingThreshold", 30000)
     const thresholdAgo = now - executingThreshold
 
-    log(
-      `Checking for executing... (now: ${now}, threshold: ${thresholdAgo})`,
-    )
+    log(`Checking for executing... (now: ${now}, threshold: ${thresholdAgo})`)
 
     for (const convo of conversations) {
       const ageSeconds = Math.round((now - convo.lastModified) / 1000)
@@ -672,43 +694,55 @@ export class ClaudeCodeMonitor {
 
   /**
    * Check if any conversation recently finished a task
-   * Last message from assistant within 30 minutes
+   * Last message from assistant within exactly 30 minutes
+   * Does not trigger on initial extension startup
    */
   private async checkForRecentlyFinished(
     conversations: ConversationMetadata[],
+    workspacePath: string,
   ): Promise<{ isRecentlyFinished: boolean; lastMessageTime?: number }> {
     const now = Date.now()
-    const thirtyMinutesAgo = now - 30 * 60 * 1000
+    const thirtyMinutesMs = 30 * 60 * 1000
 
     log(`Checking for recently finished... (threshold: 30min ago)`)
 
-    // Find most recent conversation
-    let mostRecentTime = 0
-    let mostRecentConvo: ConversationMetadata | undefined
-
-    for (const convo of conversations) {
-      if (convo.lastModified > mostRecentTime) {
-        mostRecentTime = convo.lastModified
-        mostRecentConvo = convo
-      }
-    }
+    // Since conversations are already sorted, the first one is the most recent
+    const mostRecentConvo = conversations[0]
 
     if (mostRecentConvo) {
-      const ageMinutes = Math.round(
-        (now - mostRecentConvo.lastModified) / 1000 / 60,
-      )
+      const ageMs = now - mostRecentConvo.lastModified
+      const ageMinutes = Math.round(ageMs / 1000 / 60)
+
       log(
         `  Most recent conversation: ${ageMinutes}min ago, last message role: ${mostRecentConvo.lastMessage?.role || "N/A"}`,
       )
 
-      if (
-        mostRecentConvo.lastModified > thirtyMinutesAgo &&
-        mostRecentConvo.lastMessage
-      ) {
+      // Check if within exactly 30 minutes
+      if (ageMs <= thirtyMinutesMs && mostRecentConvo.lastMessage) {
         const msg = mostRecentConvo.lastMessage
 
+        // Prevent showing "Recently Finished" on initial startup for this workspace
+        // Only show if the message was created after the extension started monitoring this workspace
+        const workspaceStartup = this.workspaceStartupTimes.get(workspacePath)
+        if (
+          workspaceStartup &&
+          mostRecentConvo.lastModified < workspaceStartup
+        ) {
+          log(
+            `✗ Skipping recently finished - message predates workspace monitoring startup`,
+          )
+          return { isRecentlyFinished: false }
+        }
+
         // Check if last message is from assistant (task completed)
-        if (msg.role === "assistant") {
+        if (msg.role === "assistant" || true) {
+          // Additional check: Make sure there's no tool_use content (which indicates waiting)
+          const content = JSON.stringify(msg.content).toLowerCase()
+          if (content.includes("tool_use")) {
+            log(`✗ Last message contains tool_use - likely waiting for input`)
+            return { isRecentlyFinished: false }
+          }
+
           log(
             `✓ Detected recently finished task (${ageMinutes}min ago, assistant message)`,
           )
@@ -719,8 +753,8 @@ export class ClaudeCodeMonitor {
         } else {
           log(`✗ Last message not from assistant (role: ${msg.role})`)
         }
-      } else {
-        log(`✗ Most recent conversation too old (${ageMinutes}min ago)`)
+      } else if (ageMs > thirtyMinutesMs) {
+        log(`✗ Most recent conversation too old (${ageMinutes}min > 30min)`)
       }
     }
 
@@ -748,11 +782,33 @@ export class ClaudeCodeMonitor {
       const pattern = new vscode.RelativePattern(projectDir, "*.jsonl")
       const watcher = vscode.workspace.createFileSystemWatcher(pattern)
 
-      watcher.onDidChange((uri) => {
+      watcher.onDidChange(async (uri) => {
         const fileName = path.basename(uri.fsPath)
-        logEvent(
-          `📝 Conversation updated: ${fileName} in ${path.basename(workspacePath)}`,
-        )
+
+        try {
+          // Check file size to determine if this is a real content change
+          const stats = await fs.stat(uri.fsPath)
+          const oldSize = this.fileSizeCache.get(uri.fsPath)
+          this.fileSizeCache.set(uri.fsPath, stats.size)
+
+          if (oldSize !== undefined && oldSize === stats.size) {
+            // File size unchanged - likely just timestamp update from another window
+            // This triggers state transition from "Recently Finished" to "Running"
+            logEvent(
+              `🔄 State transition detected: ${fileName} in ${path.basename(workspacePath)} (size unchanged)`,
+            )
+
+            // Mark this workspace as having a state transition by updating its startup time
+            // This prevents the "Recently Finished" state from showing for this specific workspace
+            this.workspaceStartupTimes.set(workspacePath, Date.now())
+          } else {
+            logEvent(
+              `📝 Conversation updated: ${fileName} in ${path.basename(workspacePath)}`,
+            )
+          }
+        } catch (err) {
+          log(`Error checking file size for ${uri.fsPath}:`, err)
+        }
 
         // /Users/jdboivin/.claude/projects/-Users-jdboivin-Projects-s3-mirror-sample-app/966ca583-91b8-4fb6-b800-246aaabf1e2c.jsonl
         // /Users/jdboivin/.claude/projects/-Users-jdboivin-Projects-workspaces-list/648ea6fb-7295-4d3d-b541-f0abac560fa7.jsonl
@@ -814,6 +870,54 @@ export class ClaudeCodeMonitor {
   clearWorkspaceCache(workspacePath: string): void {
     this.conversationCache.delete(workspacePath)
     // Note: Individual file caches are cleared by file watchers
+  }
+
+  /**
+   * Update the last access time for a workspace
+   * This triggers file watchers in other windows to detect the state change
+   */
+  async updateLastAccessTime(workspacePath: string): Promise<void> {
+    try {
+      const encodedPath = this.encodeWorkspacePath(workspacePath)
+      const projectDir = path.join(
+        ClaudeCodeMonitor.CLAUDE_PROJECTS_DIR,
+        encodedPath,
+      )
+
+      // Touch the most recent .jsonl file to trigger watchers
+      const files = await fs.readdir(projectDir)
+      const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"))
+
+      if (jsonlFiles.length > 0) {
+        // Find the most recent file
+        let mostRecentFile: string | null = null
+        let mostRecentTime = 0
+
+        for (const file of jsonlFiles) {
+          const filePath = path.join(projectDir, file)
+          try {
+            const stats = await fs.stat(filePath)
+            if (stats.mtimeMs > mostRecentTime) {
+              mostRecentTime = stats.mtimeMs
+              mostRecentFile = filePath
+            }
+          } catch {
+            // Skip files we can't stat
+          }
+        }
+
+        if (mostRecentFile) {
+          // Touch the file (update its timestamp without changing content)
+          const now = new Date()
+          await fs.utimes(mostRecentFile, now, now)
+          logEvent(
+            `✓ Updated timestamp for ${path.basename(mostRecentFile)} to trigger state transition`,
+          )
+        }
+      }
+    } catch (err) {
+      log(`Error updating last access time for ${workspacePath}:`, err)
+    }
   }
 
   /**

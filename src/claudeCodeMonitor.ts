@@ -712,7 +712,7 @@ export class ClaudeCodeMonitor {
         // /Users/jdboivin/.claude/projects/-Users-jdboivin-Projects-workspaces-list/648ea6fb-7295-4d3d-b541-f0abac560fa7.jsonl
 
         // Invalidate only this specific file's cache
-        const a = this.conversationFileCache.delete(`${uri.fsPath}`)
+        this.conversationFileCache.delete(`${uri.fsPath}`)
         // Clear workspace conversation list cache
         this.conversationCache.delete(workspacePath)
 

@@ -1,10 +1,10 @@
 import * as vscode from "vscode"
+import { BrowserWindowManager } from "./browserWindowManager"
+import { ClaudeCodeDecorator } from "./claudeCodeDecorator"
 import { ClaudeCodeMonitor } from "./claudeCodeMonitor"
 import { ConfigReader, WorkspaceConfig } from "./configReader"
 import { IconRenderer } from "./iconRenderer"
 import { MacOSWindowManager, WindowInfo } from "./macosWindowManager"
-import { BrowserWindowManager } from "./browserWindowManager"
-import { ClaudeCodeDecorator } from "./claudeCodeDecorator"
 import { ClaudeCodeStatusInfo } from "./types"
 
 export class WorkspaceItem extends vscode.TreeItem {
@@ -54,7 +54,8 @@ export class WorkspaceItem extends vscode.TreeItem {
     // Make items clickable
     this.command = {
       command: "workspacesList.focusWorkspace",
-      title: itemType === "browser" ? "Focus Browser Window" : "Focus Workspace",
+      title:
+        itemType === "browser" ? "Focus Browser Window" : "Focus Workspace",
       arguments: [this],
     }
   }
@@ -121,11 +122,15 @@ export class WorkspacesProvider
     try {
       // Get workspace windows
       const windows = await this.windowManager.getOpenWindows()
-      console.log(`[WorkspacesList] Got ${windows.length} workspace windows from manager`)
+      console.log(
+        `[WorkspacesList] Got ${windows.length} workspace windows from manager`,
+      )
 
       // Get browser windows
       const browserWindows = await this.browserWindowManager.getBrowserWindows()
-      console.log(`[WorkspacesList] Got ${browserWindows.length} browser windows`)
+      console.log(
+        `[WorkspacesList] Got ${browserWindows.length} browser windows`,
+      )
 
       // Create workspace items
       const workspaceItems = await Promise.all(
@@ -176,9 +181,10 @@ export class WorkspacesProvider
       // Create browser window items
       const browserItems = browserWindows.map((browserWindow) => {
         const label = browserWindow.title
-        const iconPath = browserWindow.app === "Safari"
-          ? new vscode.ThemeIcon("compass")
-          : new vscode.ThemeIcon("chrome-restore")
+        const iconPath =
+          browserWindow.app === "Safari"
+            ? new vscode.ThemeIcon("compass")
+            : new vscode.ThemeIcon("chrome-restore")
 
         // Create a dummy WindowInfo for browser windows
         const dummyWindowInfo: WindowInfo = {
@@ -215,11 +221,11 @@ export class WorkspacesProvider
         if (item.path && !this.watchedWorkspaces.has(item.path)) {
           const watchers = this.claudeMonitor.watchWorkspace(
             item.path,
-            () => {
+            /*() => {
               // On file change, update Claude Code status for this workspace
               console.log(`[WorkspacesList] Claude Code file change detected for ${item.path}`)
               this.updateClaudeCodeStatus()
-            }
+            }*/
           )
           this.disposables.push(...watchers)
           this.watchedWorkspaces.add(item.path)
@@ -260,9 +266,7 @@ export class WorkspacesProvider
       }
     } catch (error) {
       console.error("[WorkspacesList] Failed to focus workspace:", error)
-      vscode.window.showErrorMessage(
-        `Failed to switch to: ${item.label}`,
-      )
+      vscode.window.showErrorMessage(`Failed to switch to: ${item.label}`)
     }
   }
 
@@ -293,13 +297,18 @@ export class WorkspacesProvider
     const workspacePaths = this.workspaces.map((w) => w.path)
     if (workspacePaths.length > 0 && this.decorator) {
       // Only log when there are actual changes to reduce noise
-      const changedPaths = await this.decorator.updateAllStatuses(workspacePaths)
+      const changedPaths =
+        await this.decorator.updateAllStatuses(workspacePaths)
 
       if (changedPaths.length > 0) {
-        console.log(`[WorkspacesList] Status changed for ${changedPaths.length} workspace(s) at ${new Date().toLocaleTimeString()}`)
+        console.log(
+          `[WorkspacesList] Status changed for ${changedPaths.length} workspace(s) at ${new Date().toLocaleTimeString()}`,
+        )
 
         // Only refresh the tree items that actually changed
-        const changedItems = this.workspaces.filter(w => changedPaths.includes(w.path))
+        const changedItems = this.workspaces.filter((w) =>
+          changedPaths.includes(w.path),
+        )
 
         // Fire change events only for items that changed
         for (const workspace of changedItems) {
@@ -333,23 +342,27 @@ export class WorkspacesProvider
       })
     }
 
-    const stateChangeDisposable = vscode.window.onDidChangeWindowState((state) => {
-      const wasFocused = this.isWindowFocused
-      this.isWindowFocused = state.focused
+    const stateChangeDisposable = vscode.window.onDidChangeWindowState(
+      (state) => {
+        const wasFocused = this.isWindowFocused
+        this.isWindowFocused = state.focused
 
-      console.log(`[WorkspacesList] Window focus changed: ${wasFocused} -> ${state.focused}`)
+        console.log(
+          `[WorkspacesList] Window focus changed: ${wasFocused} -> ${state.focused}`,
+        )
 
-      // Control process monitoring based on focus
-      if (state.focused && !wasFocused) {
-        // Window gained focus - start process monitoring and immediately update
-        this.claudeMonitor.startProcessMonitoring().then(() => {
-          this.updateClaudeCodeStatus()
-        })
-      } else if (!state.focused && wasFocused) {
-        // Window lost focus - stop process monitoring
-        this.claudeMonitor.stopProcessMonitoring()
-      }
-    })
+        // Control process monitoring based on focus
+        if (state.focused && !wasFocused) {
+          // Window gained focus - start process monitoring and immediately update
+          this.claudeMonitor.startProcessMonitoring().then(() => {
+            this.updateClaudeCodeStatus()
+          })
+        } else if (!state.focused && wasFocused) {
+          // Window lost focus - stop process monitoring
+          this.claudeMonitor.stopProcessMonitoring()
+        }
+      },
+    )
 
     this.disposables.push(stateChangeDisposable)
   }

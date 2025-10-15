@@ -22,45 +22,16 @@ jobs:
         with:
           update-major-minor: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Publish Extension
+        uses: starburst997/code-extension-publish@v1
         with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci --force
-
-      - name: Update package version
-        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version
-
-      - name: Lint code
-        run: npm run lint
-
-      - name: Bundle extension
-        run: npm run package-bundle
-
-      - name: Package extension
-        run: npm run package
-
-      - name: Publish to VSCode Marketplace
-        run: npm run publish
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-
-      - name: Install ovsx
-        run: npm install -g ovsx
-
-      - name: Publish to Open VSX (darwin-x64)
-        run: ovsx publish -p ${{ secrets.OVSX_PAT }} --target darwin-x64
-
-      - name: Publish to Open VSX (darwin-arm64)
-        run: ovsx publish -p ${{ secrets.OVSX_PAT }} --target darwin-arm64
+          version: ${{ steps.version.outputs.version }}
+          vsce-pat: ${{ secrets.VSCE_PAT }}
+          ovsx-pat: ${{ secrets.OVSX_PAT }}
+          platforms: "darwin-x64,darwin-arm64"
 
       - name: Generate changelog and create release
         uses: starburst997/commits-logs@v1
         with:
-          format: grouped
-          create-release: true
           artifacts: |
             *.vsix

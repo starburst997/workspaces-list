@@ -11,16 +11,25 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Initialize custom bot
+        id: bot
+        uses: starburst997/custom-bot-init@v1
+        with:
+          app-id: ${{ secrets.BOT_ID }}
+          private-key: ${{ secrets.BOT_KEY }}
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ steps.bot.outputs.token }}
 
       - name: Version and Tag
         id: version
         uses: starburst997/auto-version@v1
         with:
-          update-major-minor: true
+          git-push: false
+          git-config: false
 
       - name: Publish Extension
         uses: starburst997/code-extension-publish@v1
@@ -33,5 +42,7 @@ jobs:
       - name: Generate changelog and create release
         uses: starburst997/commits-logs@v1
         with:
+          token: ${{ steps.bot.outputs.token }}
+          git-push: true
           artifacts: |
             *.vsix

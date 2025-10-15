@@ -9,5 +9,10 @@
   "search.exclude": {
     "out": true,
     "node_modules": true
-  }
+  },
+  "cSpell.words": [
+    "Boivin",
+    "jdboivin",
+    "ovsx"
+  ]
 }

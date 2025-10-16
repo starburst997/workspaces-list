@@ -24,12 +24,11 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.bot.outputs.token }}
 
-      - name: Version and Tag
+      - name: Tag Version
         id: version
         uses: starburst997/auto-version@v1
         with:
           git-push: false
-          git-config: false
 
       - name: Publish Extension
         uses: starburst997/code-extension-publish@v1

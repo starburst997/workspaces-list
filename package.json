@@ -164,10 +164,10 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run package-bundle",
+    "vscode:prepublish": "npm run build",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package-bundle": "node esbuild.js --production",
+    "build": "node esbuild.js --production",
     "compile-bundle": "node esbuild.js",
     "watch-bundle": "node esbuild.js --watch",
     "pretest": "npm run compile",
